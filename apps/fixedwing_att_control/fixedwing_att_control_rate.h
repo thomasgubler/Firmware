@@ -43,6 +43,7 @@
 
 int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 		const float rates[],
+		const float speed_body[],
 		struct actuator_controls_s *actuators);
 
 #endif /* FIXEDWING_ATT_CONTROL_RATE_H_ */
