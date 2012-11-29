@@ -158,6 +158,7 @@ static int parameters_update(const struct fw_rate_control_param_handles *h, stru
 
 int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 		const float rates[],
+		const float speed_body[],
 		struct actuator_controls_s *actuators)
 {
 	static int counter = 0;
@@ -174,8 +175,7 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 	const float deltaT = (hrt_absolute_time() - last_run) / 1000000.0f;
 	last_run = hrt_absolute_time();
 
-	if(!initialized)
-	{
+	if(!initialized) {
 		parameters_init(&h);
 		parameters_update(&h, &p);
 		pid_init(&roll_rate_controller, p.rollrate_p, p.rollrate_i, 0, p.rollrate_awu, 1, PID_MODE_DERIVATIV_NONE); // set D part to 0 because the controller layout is with a PI rate controller
@@ -188,16 +188,29 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 	if (counter % 100 == 0) {
 		/* update parameters from storage */
 		parameters_update(&h, &p);
-		pid_set_parameters(&roll_rate_controller, p.rollrate_p, p.rollrate_i, 0, p.rollrate_awu, 1);
-		pid_set_parameters(&pitch_rate_controller, p.pitchrate_p, p.pitchrate_i, 0, p.pitchrate_awu, 1);
-		pid_set_parameters(&yaw_rate_controller, p.yawrate_p, p.yawrate_i, 0, p.yawrate_awu, 1);
 	}
 
+	//TODO for the moment we use groundspeed here instead of the true airspeed
+	float airspeed_square_inv;
+	float airspeed_square = fabsf(speed_body[0] * speed_body[0] + speed_body[1] * speed_body[1] + speed_body[2] * speed_body[2]);
+	if(airspeed_square > 0) {
+		airspeed_square_inv = 1.0f / airspeed_square;
+	}
+	else
+	{
+		airspeed_square_inv = 1000.0f; //XXX (max speed)^2?
+	}
+
+	/* scale control parameters (less control surface deflection at higher seeds */
+	pid_set_parameters(&roll_rate_controller, p.rollrate_p * airspeed_square_inv, p.rollrate_i  * airspeed_square_inv, 0, p.rollrate_awu, 1);
+	pid_set_parameters(&pitch_rate_controller, p.pitchrate_p * airspeed_square_inv, p.pitchrate_i * airspeed_square_inv, 0, p.pitchrate_awu, 1);
+	pid_set_parameters(&yaw_rate_controller, p.yawrate_p * airspeed_square_inv, p.yawrate_i * airspeed_square_inv, 0, p.yawrate_awu, 1);
 
 	/* roll rate (PI) */
 	actuators->control[0] = pid_calculate(&roll_rate_controller, rate_sp->roll, rates[0], 0.0f, deltaT);
 	/* pitch rate (PI) */
 	actuators->control[1] = pid_calculate(&pitch_rate_controller, rate_sp->pitch, rates[1], 0.0f, deltaT);
+	//TODO XXX the feedforward below is dangerous, as soon as the throttle/elevator MIMO controller is ready this has to be removed
 	/* set pitch minus feedforward throttle compensation (nose pitches up from throttle */
 	actuators->control[1] += (-1.0f) * p.pitch_thr_ff * rate_sp->thrust;
 	/* yaw rate (PI) */

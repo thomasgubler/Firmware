@@ -192,7 +192,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 				orb_publish(ORB_ID(vehicle_rates_setpoint), rates_pub, &rates_sp);
 
 				/* angular rate control */
-				fixedwing_att_control_rates(&rates_sp, gyro, &actuators);
+				fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators);
 
 				/* pass through throttle */
 				actuators.control[3] = att_sp.thrust;
@@ -201,7 +201,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 
 				/* if the RC signal is lost, try to stay level and go slowly back down to ground */
 				if(vstatus.rc_signal_lost) {
-					
+
 					// XXX define failsafe throttle param
 					//param_get(failsafe_throttle_handle, &failsafe_throttle);
 					att_sp.roll_body = 0.3f;
@@ -211,7 +211,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 					// XXX disable yaw control, loiter
 
 				} else {
-					
+
 					att_sp.roll_body = manual_sp.roll;
 					att_sp.pitch_body = manual_sp.pitch;
 					att_sp.yaw_body = 0;
@@ -225,7 +225,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 				orb_publish(ORB_ID(vehicle_rates_setpoint), rates_pub, &rates_sp);
 
 				/* angular rate control */
-				fixedwing_att_control_rates(&rates_sp, gyro, &actuators);
+				fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators);
 
 				/* pass through throttle */
 				actuators.control[3] = att_sp.thrust;

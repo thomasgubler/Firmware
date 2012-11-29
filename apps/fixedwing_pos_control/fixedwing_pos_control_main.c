@@ -396,6 +396,14 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 					} else {
 						// XXX no setpoint, decent default needed (loiter?)
+
+						attitude_setpoint.roll_body = 0.0f;
+						attitude_setpoint.pitch_body = 0.0f;
+						attitude_setpoint.yaw_body = 0.0f;
+						attitude_setpoint.thrust = 0.7f;
+
+						/* publish the attitude setpoint */
+						orb_publish(ORB_ID(vehicle_attitude_setpoint), attitude_setpoint_pub, &attitude_setpoint);
 					}
 				}
 			}
