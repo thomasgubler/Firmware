@@ -51,25 +51,36 @@
 #include "px4io.h"
 
 static struct hrt_call arming_call;
+static struct hrt_call heartbeat_call;
+static struct hrt_call failsafe_call;
 
 /*
  * Count the number of times in a row that we see the arming button
  * held down.
  */
-static unsigned counter;
+static unsigned counter = 0;
 
 #define ARM_COUNTER_THRESHOLD	10
 #define DISARM_COUNTER_THRESHOLD	2
 
 static bool safety_led_state;
 static bool safety_button_pressed;
+
 static void safety_check_button(void *arg);
+static void heartbeat_blink(void *arg);
+static void failsafe_blink(void *arg);
 
 void
 safety_init(void)
 {
 	/* arrange for the button handler to be called at 10Hz */
 	hrt_call_every(&arming_call, 1000, 100000, safety_check_button, NULL);
+
+	/* arrange for the heartbeat handler to be called at 4Hz */
+	hrt_call_every(&heartbeat_call, 1000, 250000, heartbeat_blink, NULL);
+
+	/* arrange for the failsafe blinker to be called at 8Hz */
+	hrt_call_every(&failsafe_call, 1000, 125000, failsafe_blink, NULL);
 }
 
 static void
@@ -116,4 +127,29 @@ safety_check_button(void *arg)
 		safety_led_state = true;
 	}
 	LED_SAFETY(safety_led_state);
+}
+
+
+static void
+heartbeat_blink(void *arg)
+{
+	static bool heartbeat = false;
+
+	/* XXX add flags here that need to be frobbed by various loops */
+
+	LED_BLUE(heartbeat = !heartbeat);
+}
+
+static void
+failsafe_blink(void *arg)
+{
+	static bool failsafe = false;
+
+	/* blink the failsafe LED if we don't have FMU input */
+	if (!system_state.mixer_use_fmu) {
+		failsafe = !failsafe;
+	} else {
+		failsafe = false;
+	}
+	LED_AMBER(failsafe);
 }

@@ -49,7 +49,6 @@
 #include <fcntl.h>
 
 #include <drivers/drv_pwm_output.h>
-#include <drivers/drv_hrt.h>
 
 #include <systemlib/ppm_decode.h>
 
@@ -60,17 +59,6 @@
  */
 static unsigned fmu_input_drops;
 #define FMU_INPUT_DROP_LIMIT	20
-
-/*
- * HRT periodic call used to check for control input data.
- */
-static struct hrt_call mixer_input_call;
-
-/*
- * Mixer periodic tick.
- */
-static void	mixer_tick(void *arg);
-
 /*
  * Collect RC input data from the controller source(s).
  */
@@ -92,20 +80,8 @@ struct mixer {
 	/* XXX more config here */
 } mixers[IO_SERVO_COUNT];
 
-int
-mixer_init(void)
-{
-
-
-	/* look for control data at 50Hz */
-	hrt_call_every(&mixer_input_call, 1000, 20000, mixer_tick, NULL);
-
-	return 0;
-}
-
-
-static void
-mixer_tick(void *arg)
+void
+mixer_tick(void)
 {
 	uint16_t *control_values;
 	int control_count;
@@ -121,7 +97,7 @@ mixer_tick(void *arg)
 	/*
 	 * Decide which set of inputs we're using.
 	 */
-	if (system_state.mixer_use_fmu) {
+	if (system_state.mixer_use_fmu && system_state.mixer_fmu_available) {
 		/* we have recent control data from the FMU */
 		control_count = PX4IO_OUTPUT_CHANNELS;
 		control_values = &system_state.fmu_channel_data[0];
@@ -148,12 +124,11 @@ mixer_tick(void *arg)
 		/* we have no control input */
 		control_count = 0;
 	}
-
 	/*
 	 * Tickle each mixer, if we have control data.
 	 */
 	if (control_count > 0) {
-		for (i = 0; i < PX4IO_OUTPUT_CHANNELS; i++) {
+		for (i = 0; i < IO_SERVO_COUNT; i++) {
 			mixer_update(i, control_values, control_count);
 
 			/*
@@ -166,9 +141,10 @@ mixer_tick(void *arg)
 
 	/*
 	 * Decide whether the servos should be armed right now.
+	 * A sufficient reason is armed state and either FMU or RC control inputs
 	 */
 
-	should_arm = system_state.armed && system_state.arm_ok && (control_count > 0) && system_state.mixer_use_fmu;
+	should_arm = system_state.armed && system_state.arm_ok && (control_count > 0);
 	if (should_arm && !mixer_servos_armed) {
 		/* need to arm, but not armed */
 		up_pwm_servo_arm(true);
@@ -195,17 +171,26 @@ mixer_update(int mixer, uint16_t *inputs, int input_count)
 static void
 mixer_get_rc_input(void)
 {
-
 	/* if we haven't seen any new data in 200ms, assume we have lost input and tell FMU */
 	if ((hrt_absolute_time() - ppm_last_valid_decode) > 200000) {
-		system_state.rc_channels = 0;
-		system_state.fmu_report_due = true;
+
+		/* input was ok and timed out, mark as update */
+		if (system_state.ppm_input_ok) {
+			system_state.ppm_input_ok = false;
+			system_state.fmu_report_due = true;
+		}
 		return;
 	}
 
-	/* otherwise, copy channel data */
-	system_state.rc_channels = ppm_decoded_channels;
-	for (unsigned i = 0; i < ppm_decoded_channels; i++)
-		system_state.rc_channel_data[i] = ppm_buffer[i];
-	system_state.fmu_report_due = true;
+	/* mark PPM as valid */
+	system_state.ppm_input_ok = true;
+
+	/* check if no DSM and S.BUS data is available */
+	if (!system_state.sbus_input_ok && !system_state.dsm_input_ok) {
+		/* otherwise, copy channel data */
+		system_state.rc_channels = ppm_decoded_channels;
+		for (unsigned i = 0; i < ppm_decoded_channels; i++)
+			system_state.rc_channel_data[i] = ppm_buffer[i];
+		system_state.fmu_report_due = true;
+	}
 }
