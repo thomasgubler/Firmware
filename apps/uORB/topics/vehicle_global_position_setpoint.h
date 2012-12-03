@@ -51,6 +51,11 @@
  * @{
  */
 
+typedef enum {
+	WP_NAV_EXACT,       /**< navigate exactly to the coordinates, used for first and last wp */
+	WP_NAV_GUIDE,		/**< fly around (arc) the wp, then continue to the next wp, used for all wp except first and last, arc calculated from lat_next and lon_next */
+} waypoint_navigation_t;
+
 /**
  * Global position setpoint in WGS84 coordinates.
  *
@@ -60,12 +65,15 @@
 struct vehicle_global_position_setpoint_s
 {
 	bool altitude_is_relative;	/**< true if altitude is relative from start point	*/
+	waypoint_navigation_t waypoint_navigation;
 	int32_t lat;			/**< latitude in degrees * 1E7				*/
 	int32_t lon;			/**< longitude in degrees * 1E7				*/
 	float altitude;			/**< altitude in meters					*/
-	float yaw;			/**< in radians NED -PI..+PI 				*/
+	float yaw;			    /**< in radians NED -PI..+PI 				*/
 	float loiter_radius;		/**< loiter radius in meters, 0 for a VTOL to hover     */
 	bool is_loiter;			/**< true if loitering is enabled			*/
+	int32_t lat_next;			/**< latitude of next setpoint in degrees * 1E7, only used if waypoint_navigation == WP_NAV_GUIDE	*/
+	int32_t lon_next;			/**< longitude of next setpoint in degrees * 1E7, only used if waypoint_navigation == WP_NAV_GUIDE	*/
 };
 
 /**

@@ -154,11 +154,20 @@ void mavlink_wpm_send_waypoint_current(uint16_t seq)
  */
 void mavlink_wpm_send_setpoint(uint16_t seq)
 {
-	if (seq < wpm->size) {
+	if (seq + 1 < wpm->size) {
+		mavlink_mission_item_t *cur = &(wpm->waypoints[seq]);
+		mavlink_mission_item_t *next = &(wpm->waypoints[seq + 1]);
+		mavlink_missionlib_current_waypoint_changed(cur->seq, cur->param1,
+				cur->param2, cur->param3, cur->param4, cur->x,
+				cur->y, cur->z, cur->frame, cur->command, WP_NAV_GUIDE, next->x, next->y);
+
+		wpm->timestamp_last_send_setpoint = mavlink_missionlib_get_system_timestamp();
+	}
+	else if (seq < wpm->size) {
 		mavlink_mission_item_t *cur = &(wpm->waypoints[seq]);
 		mavlink_missionlib_current_waypoint_changed(cur->seq, cur->param1,
 				cur->param2, cur->param3, cur->param4, cur->x,
-				cur->y, cur->z, cur->frame, cur->command);
+				cur->y, cur->z, cur->frame, cur->command, WP_NAV_GUIDE, 0, 0);
 
 		wpm->timestamp_last_send_setpoint = mavlink_missionlib_get_system_timestamp();
 

@@ -129,7 +129,8 @@ uint64_t mavlink_missionlib_get_system_timestamp()
  */
 void mavlink_missionlib_current_waypoint_changed(uint16_t index, float param1,
 		float param2, float param3, float param4, float param5_lat_x,
-		float param6_lon_y, float param7_alt_z, uint8_t frame, uint16_t command)
+		float param6_lon_y, float param7_alt_z, uint8_t frame, uint16_t command,
+		waypoint_navigation_t waypoint_navigation, float next_lat_x, float next_lon_y)
 {
 	static orb_advert_t global_position_setpoint_pub = -1;
 	static orb_advert_t local_position_setpoint_pub = -1;
@@ -144,6 +145,18 @@ void mavlink_missionlib_current_waypoint_changed(uint16_t index, float param1,
 		sp.altitude = param7_alt_z;
 		sp.altitude_is_relative = false;
 		sp.yaw = (param4 / 180.0f) * M_PI_F - M_PI_F;
+
+		/* Set info about next waypoint for horizontal navigation if necessary */
+		if(waypoint_navigation == WP_NAV_GUIDE) {
+			sp.waypoint_navigation = WP_NAV_GUIDE;
+			sp.lat_next = next_lat_x  * 1e7f;
+			sp.lon_next = next_lon_y  * 1e7f;
+		}
+		else {
+			sp.waypoint_navigation = waypoint_navigation;
+		}
+
+
 		/* Initialize publication if necessary */
 		if (global_position_setpoint_pub < 0) {
 			global_position_setpoint_pub = orb_advertise(ORB_ID(vehicle_global_position_setpoint), &sp);
