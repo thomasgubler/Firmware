@@ -31,51 +31,18 @@
  *
  ****************************************************************************/
 
-/**
- * @file PX4FMU <-> PX4IO messaging protocol.
- *
- * This initial version of the protocol is very simple; each side transmits a
- * complete update with each frame.  This avoids the sending of many small
- * messages and the corresponding complexity involved.
- */
-
 #pragma once
 
-#define PX4IO_OUTPUT_CHANNELS	8
-#define PX4IO_INPUT_CHANNELS	12
-#define PX4IO_RELAY_CHANNELS	4
+#include <nuttx/sched.h>
 
-#pragma pack(push, 1)
-
-/* command from FMU to IO */
-struct px4io_command {
-	uint16_t	f2i_magic;
-#define F2I_MAGIC	0x636d
-
-	uint16_t	servo_command[PX4IO_OUTPUT_CHANNELS];	/**< servo output channels */
-	uint16_t	servo_rate;				/**< PWM output rate in Hz */
-	bool		relay_state[PX4IO_RELAY_CHANNELS];	/**< relay states as requested by FMU */
-	bool		arm_ok;					/**< FMU allows full arming */
-	bool		vector_flight_mode_ok;			/**< FMU aquired a valid position lock, ready for pos control */
-	bool		manual_override_ok;			/**< if true, IO performs a direct manual override */ 
-};
-
-/* config message from FMU to IO */
-struct px4io_config {
-	uint16_t f2i_config_magic;
-#define F2I_CONFIG_MAGIC 0x6366
-
-	/* XXX currently nothing here */
-};
-
-/* report from IO to FMU */
-struct px4io_report {
-	uint16_t	i2f_magic;
-#define I2F_MAGIC		0x7570
-
-	uint16_t	rc_channel[PX4IO_INPUT_CHANNELS];
-	bool		armed;
-	uint8_t		channel_count;
-};
-
-#pragma pack(pop)
+/*      SCHED_PRIORITY_MAX    */
+#define SCHED_PRIORITY_FAST_DRIVER           SCHED_PRIORITY_MAX
+#define SCHED_PRIORITY_WATCHDOG             (SCHED_PRIORITY_MAX - 5)
+#define SCHED_PRIORITY_ACTUATOR_OUTPUTS     (SCHED_PRIORITY_MAX - 15)
+#define SCHED_PRIORITY_ATTITUDE_CONTROL     (SCHED_PRIORITY_MAX - 25)
+#define SCHED_PRIORITY_SLOW_DRIVER          (SCHED_PRIORITY_MAX - 35)
+#define SCHED_PRIORITY_POSITION_CONTROL     (SCHED_PRIORITY_MAX - 40)
+/*      SCHED_PRIORITY_DEFAULT    */
+#define SCHED_PRIORITY_LOGGING              (SCHED_PRIORITY_DEFAULT - 10)
+#define SCHED_PRIORITY_PARAMS               (SCHED_PRIORITY_DEFAULT - 15)
+/*      SCHED_PRIORITY_IDLE    */
