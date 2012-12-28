@@ -72,6 +72,7 @@ struct vehicle_global_position_setpoint_s
 	float yaw;			    /**< in radians NED -PI..+PI 				*/
 	float loiter_radius;		/**< loiter radius in meters, 0 for a VTOL to hover     */
 	bool is_loiter;			/**< true if loitering is enabled			*/
+	float acceptance_radius;			/**< radius of orbit around wp which the mav has to fly through */
 	int32_t lat_next;			/**< latitude of next setpoint in degrees * 1E7, only used if waypoint_navigation == WP_NAV_GUIDE	*/
 	int32_t lon_next;			/**< longitude of next setpoint in degrees * 1E7, only used if waypoint_navigation == WP_NAV_GUIDE	*/
 };

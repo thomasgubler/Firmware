@@ -145,6 +145,7 @@ void mavlink_missionlib_current_waypoint_changed(uint16_t index, float param1,
 		sp.altitude = param7_alt_z;
 		sp.altitude_is_relative = false;
 		sp.yaw = (param4 / 180.0f) * M_PI_F - M_PI_F;
+		sp.acceptance_radius = param2;
 
 		/* Set info about next waypoint for horizontal navigation if necessary */
 		if(waypoint_navigation == WP_NAV_GUIDE) {

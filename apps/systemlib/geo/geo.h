@@ -95,3 +95,10 @@ __EXPORT float _wrap_180(float bearing);
 __EXPORT float _wrap_360(float bearing);
 __EXPORT float _wrap_pi(float bearing);
 __EXPORT float _wrap_2pi(float bearing);
+
+__EXPORT void get_guide_WP_center_of_circle(float last_lat_x, float last_lon_y,
+		float current_lat_x, float current_lon_y,
+		float next_lat_x, float next_lon_y,
+		float * center_lat_x, float * center_lon_y);
+
+__EXPORT float get_circle_bearing(float phi);
