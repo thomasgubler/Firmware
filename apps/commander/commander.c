@@ -59,7 +59,6 @@
 #include <errno.h>
 #include <debug.h>
 #include <sys/prctl.h>
-#include <v1.0/common/mavlink.h>
 #include <string.h>
 #include <drivers/drv_led.h>
 #include <drivers/drv_hrt.h>
@@ -147,7 +146,6 @@ int commander_thread_main(int argc, char *argv[]);
 
 static int buzzer_init(void);
 static void buzzer_deinit(void);
-static void tune_confirm(void);
 static int led_init(void);
 static void led_deinit(void);
 static int led_toggle(int led);
@@ -270,6 +268,10 @@ int trigger_audio_alarm(uint8_t old_mode, uint8_t old_state, uint8_t new_mode, u
 
 void tune_confirm(void) {
 	ioctl(buzzer, TONE_SET_ALARM, 3);
+}
+
+void tune_error(void) {
+	ioctl(buzzer, TONE_SET_ALARM, 4);
 }
 
 void do_rc_calibration(int status_pub, struct vehicle_status_s *status)
@@ -770,7 +772,7 @@ void do_accel_calibration(int status_pub, struct vehicle_status_s *status)
 void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_status, struct vehicle_command_s *cmd)
 {
 	/* result of the command */
-	uint8_t result = MAV_RESULT_UNSUPPORTED;
+	uint8_t result = VEHICLE_CMD_RESULT_UNSUPPORTED;
 
 	/* announce command handling */
 	tune_confirm();
@@ -780,99 +782,74 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 
 	/* request to set different system mode */
 	switch (cmd->command) {
-		case MAV_CMD_DO_SET_MODE:
+		case VEHICLE_CMD_DO_SET_MODE:
 		{
 			if (OK == update_state_machine_mode_request(status_pub, current_vehicle_status, mavlink_fd, (uint8_t)cmd->param1)) {
-				result = MAV_RESULT_ACCEPTED;
+				result = VEHICLE_CMD_RESULT_ACCEPTED;
 			} else {
-				result = MAV_RESULT_DENIED;
+				result = VEHICLE_CMD_RESULT_DENIED;
 			}
 		}
 		break;
 
-		case MAV_CMD_COMPONENT_ARM_DISARM: {
+		case VEHICLE_CMD_COMPONENT_ARM_DISARM: {
 			/* request to arm */
 			if ((int)cmd->param1 == 1) {
 				if (OK == update_state_machine_mode_request(status_pub, current_vehicle_status, mavlink_fd, VEHICLE_MODE_FLAG_SAFETY_ARMED)) {
-					result = MAV_RESULT_ACCEPTED;
+					result = VEHICLE_CMD_RESULT_ACCEPTED;
 				} else {
-					result = MAV_RESULT_DENIED;
+					result = VEHICLE_CMD_RESULT_DENIED;
 				}
 			/* request to disarm */
 			} else if ((int)cmd->param1 == 0) {
 				if (OK == update_state_machine_mode_request(status_pub, current_vehicle_status, mavlink_fd, VEHICLE_MODE_FLAG_SAFETY_ARMED)) {
-					result = MAV_RESULT_ACCEPTED;
+					result = VEHICLE_CMD_RESULT_ACCEPTED;
 				} else {
-					result = MAV_RESULT_DENIED;
+					result = VEHICLE_CMD_RESULT_DENIED;
 				}
 			}
 		}
 		break;
 
 		/* request for an autopilot reboot */
-		case MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN: {
+		case VEHICLE_CMD_PREFLIGHT_REBOOT_SHUTDOWN: {
 			if ((int)cmd->param1 == 1) {
 				if (OK == do_state_update(status_pub, current_vehicle_status, mavlink_fd, SYSTEM_STATE_REBOOT)) {
 					/* SPECIAL CASE: SYSTEM WILL NEVER RETURN HERE */
-					result = MAV_RESULT_ACCEPTED;
+					result = VEHICLE_CMD_RESULT_ACCEPTED;
 				} else {
 					/* system may return here */
-					result = MAV_RESULT_DENIED;
+					result = VEHICLE_CMD_RESULT_DENIED;
 				}
 			}
 		}
 		break;
 
-		case PX4_CMD_CONTROLLER_SELECTION: {
-			bool changed = false;
-			if ((int)cmd->param1 != (int)current_vehicle_status->flag_control_rates_enabled) {
-				current_vehicle_status->flag_control_rates_enabled = cmd->param1;
-				changed = true;
-			}
-			if ((int)cmd->param2 != (int)current_vehicle_status->flag_control_attitude_enabled) {
-				current_vehicle_status->flag_control_attitude_enabled = cmd->param2;
-				changed = true;
-			}
-			if ((int)cmd->param3 != (int)current_vehicle_status->flag_control_velocity_enabled) {
-				current_vehicle_status->flag_control_velocity_enabled = cmd->param3;
-				changed = true;
-			}
-			if ((int)cmd->param4 != (int)current_vehicle_status->flag_control_position_enabled) {
-				current_vehicle_status->flag_control_position_enabled = cmd->param4;
-				changed = true;
-			}
-
-			if (changed) {
-				/* publish current state machine */
-				state_machine_publish(status_pub, current_vehicle_status, mavlink_fd);
-			}
-		}
-
 //		/* request to land */
-//		case MAV_CMD_NAV_LAND:
+//		case VEHICLE_CMD_NAV_LAND:
 //		 {
 //				//TODO: add check if landing possible
 //				//TODO: add landing maneuver
 //
 //				if (0 == update_state_machine_custom_mode_request(status_pub, current_vehicle_status, SYSTEM_STATE_ARMED)) {
-//					result = MAV_RESULT_ACCEPTED;
+//					result = VEHICLE_CMD_RESULT_ACCEPTED;
 //		}		}
 //		break;
 //
 //		/* request to takeoff */
-//		case MAV_CMD_NAV_TAKEOFF:
+//		case VEHICLE_CMD_NAV_TAKEOFF:
 //		{
 //			//TODO: add check if takeoff possible
 //			//TODO: add takeoff maneuver
 //
 //			if (0 == update_state_machine_custom_mode_request(status_pub, current_vehicle_status, SYSTEM_STATE_AUTO)) {
-//				result = MAV_RESULT_ACCEPTED;
+//				result = VEHICLE_CMD_RESULT_ACCEPTED;
 //			}
 //		}
 //		break;
 //
 		/* preflight calibration */
-		case MAV_CMD_PREFLIGHT_CALIBRATION: {
+		case VEHICLE_CMD_PREFLIGHT_CALIBRATION: {
 			bool handled = false;
 
 			/* gyro calibration */
@@ -887,10 +864,10 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 					mavlink_log_info(mavlink_fd, "[cmd] finished gyro calibration");
 					tune_confirm();
 					do_state_update(status_pub, &current_status, mavlink_fd, SYSTEM_STATE_STANDBY);
-					result = MAV_RESULT_ACCEPTED;
+					result = VEHICLE_CMD_RESULT_ACCEPTED;
 				} else {
 					mavlink_log_critical(mavlink_fd, "[cmd] REJECTING gyro calibration");
-					result = MAV_RESULT_DENIED;
+					result = VEHICLE_CMD_RESULT_DENIED;
 				}
 				handled = true;
 			}
@@ -907,10 +884,10 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 					mavlink_log_info(mavlink_fd, "[cmd] finished mag calibration");
 					tune_confirm();
 					do_state_update(status_pub, &current_status, mavlink_fd, SYSTEM_STATE_STANDBY);
-					result = MAV_RESULT_ACCEPTED;
+					result = VEHICLE_CMD_RESULT_ACCEPTED;
 				} else {
 					mavlink_log_critical(mavlink_fd, "[cmd] REJECTING mag calibration");
-					result = MAV_RESULT_DENIED;
+					result = VEHICLE_CMD_RESULT_DENIED;
 				}
 				handled = true;
 			}
@@ -925,7 +902,7 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 					tune_confirm();
 				} else {
 					mavlink_log_critical(mavlink_fd, "[cmd] REJECTING altitude calibration");
-					result = MAV_RESULT_DENIED;
+					result = VEHICLE_CMD_RESULT_DENIED;
 				}
 				handled = true;
 			}
@@ -942,10 +919,10 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 					mavlink_log_info(mavlink_fd, "[cmd] finished trim calibration");
 					tune_confirm();
 					do_state_update(status_pub, &current_status, mavlink_fd, SYSTEM_STATE_STANDBY);
-					result = MAV_RESULT_ACCEPTED;
+					result = VEHICLE_CMD_RESULT_ACCEPTED;
 				} else {
 					mavlink_log_critical(mavlink_fd, "[cmd] REJECTING trim calibration");
-					result = MAV_RESULT_DENIED;
+					result = VEHICLE_CMD_RESULT_DENIED;
 				}
 				handled = true;
 			}
@@ -962,10 +939,10 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 					tune_confirm();
 					mavlink_log_info(mavlink_fd, "[cmd] CMD finished accel calibration");
 					do_state_update(status_pub, &current_status, mavlink_fd, SYSTEM_STATE_STANDBY);
-					result = MAV_RESULT_ACCEPTED;
+					result = VEHICLE_CMD_RESULT_ACCEPTED;
 				} else {
 					mavlink_log_critical(mavlink_fd, "[cmd] REJECTING accel calibration");
-					result = MAV_RESULT_DENIED;
+					result = VEHICLE_CMD_RESULT_DENIED;
 				}
 				handled = true;
 			}
@@ -974,14 +951,19 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 			if (!handled) {
 				//fprintf(stderr, "[cmd] refusing unsupported calibration request\n");
 				mavlink_log_critical(mavlink_fd, "[cmd] CMD refusing unsup. calib. request");
-				result = MAV_RESULT_UNSUPPORTED;
+				result = VEHICLE_CMD_RESULT_UNSUPPORTED;
 			}
 		}
 		break;
 
-		case MAV_CMD_PREFLIGHT_STORAGE: {
-			if (current_status.flag_system_armed) {
-				mavlink_log_info(mavlink_fd, "[cmd] REJECTING param command while armed");
+		case VEHICLE_CMD_PREFLIGHT_STORAGE: {
+			if (current_status.flag_system_armed &&
+				((current_status.system_type == VEHICLE_TYPE_QUADROTOR) ||
+						(current_status.system_type == VEHICLE_TYPE_HEXAROTOR) ||
+						(current_status.system_type == VEHICLE_TYPE_OCTOROTOR))) {
+				/* do not perform expensive memory tasks on multirotors in flight */
+				// XXX this is over-safe, as soon as cmd is in low prio thread this can be allowed
+				mavlink_log_info(mavlink_fd, "[cmd] REJECTING save cmd while multicopter armed");
 			} else {
 
 				// XXX move this to LOW PRIO THREAD of commander app
@@ -995,11 +977,11 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 						//printf("[mavlink pm] Loaded EEPROM params in RAM\n");
 						mavlink_log_info(mavlink_fd, "[cmd] OK loading params from");
 						mavlink_log_info(mavlink_fd, param_get_default_file());
-						result = MAV_RESULT_ACCEPTED;
+						result = VEHICLE_CMD_RESULT_ACCEPTED;
 					} else if (read_ret == 1) {
 						mavlink_log_info(mavlink_fd, "[cmd] OK no changes in");
 						mavlink_log_info(mavlink_fd, param_get_default_file());
-						result = MAV_RESULT_ACCEPTED;
+						result = VEHICLE_CMD_RESULT_ACCEPTED;
 					} else {
 						if (read_ret < -1) {
 							mavlink_log_info(mavlink_fd, "[cmd] ERR loading params from");
@@ -1008,7 +990,7 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 							mavlink_log_info(mavlink_fd, "[cmd] ERR no param file named");
 							mavlink_log_info(mavlink_fd, param_get_default_file());
 						}
-						result = MAV_RESULT_FAILED;
+						result = VEHICLE_CMD_RESULT_FAILED;
 					}
 
 				} else if (((int)(cmd->param1)) == 1)	{
@@ -1018,7 +1000,7 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 					if (write_ret == OK) {
 						mavlink_log_info(mavlink_fd, "[cmd] OK saved param file");
 						mavlink_log_info(mavlink_fd, param_get_default_file());
-						result = MAV_RESULT_ACCEPTED;
+						result = VEHICLE_CMD_RESULT_ACCEPTED;
 
 					} else {
 						if (write_ret < -1) {
@@ -1028,12 +1010,12 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 							mavlink_log_info(mavlink_fd, "[cmd] ERR writing params to");
 							mavlink_log_info(mavlink_fd, param_get_default_file());
 						}
-						result = MAV_RESULT_FAILED;
+						result = VEHICLE_CMD_RESULT_FAILED;
 					}
 
 				} else {
 					mavlink_log_info(mavlink_fd, "[pm] refusing unsupp. STOR request");
-					result = MAV_RESULT_UNSUPPORTED;
+					result = VEHICLE_CMD_RESULT_UNSUPPORTED;
 				}
 			}
 		}
@@ -1041,7 +1023,7 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 
 		default: {
 			mavlink_log_critical(mavlink_fd, "[cmd] refusing unsupported command");
-			result = MAV_RESULT_UNSUPPORTED;
+			result = VEHICLE_CMD_RESULT_UNSUPPORTED;
 			/* announce command rejection */
 			ioctl(buzzer, TONE_SET_ALARM, 4);
 		}
@@ -1049,11 +1031,11 @@ void handle_command(int status_pub, struct vehicle_status_s *current_vehicle_sta
 	}
 
 	/* supported command handling stop */
-	if (result == MAV_RESULT_FAILED ||
-		result == MAV_RESULT_DENIED ||
-		result == MAV_RESULT_UNSUPPORTED) {
+	if (result == VEHICLE_CMD_RESULT_FAILED ||
+		result == VEHICLE_CMD_RESULT_DENIED ||
+		result == VEHICLE_CMD_RESULT_UNSUPPORTED) {
 		ioctl(buzzer, TONE_SET_ALARM, 5);
-	} else if (result == MAV_RESULT_ACCEPTED) {
+	} else if (result == VEHICLE_CMD_RESULT_ACCEPTED) {
 		tune_confirm();
 	}
 
@@ -1232,7 +1214,7 @@ int commander_thread_main(int argc, char *argv[])
 	failsafe_lowlevel_timeout_ms = 0;
 	param_get(param_find("SYS_FAILSAVE_LL"), &failsafe_lowlevel_timeout_ms);
 
-	param_t _param_sys_type = param_find("MAV_TYPE");
+	param_t _param_sys_type = param_find("VEHICLE_TYPE");
 
 	/* welcome user */
 	printf("[cmd] I am in command now!\n");
@@ -1403,9 +1385,9 @@ int commander_thread_main(int argc, char *argv[])
 					warnx("failed setting new system type");
 				}
 				/* disable manual override for all systems that rely on electronic stabilization */
-				if (current_status.system_type == MAV_TYPE_QUADROTOR ||
-				    current_status.system_type == MAV_TYPE_HEXAROTOR ||
-				    current_status.system_type == MAV_TYPE_OCTOROTOR) {
+				if (current_status.system_type == VEHICLE_TYPE_QUADROTOR ||
+				    current_status.system_type == VEHICLE_TYPE_HEXAROTOR ||
+				    current_status.system_type == VEHICLE_TYPE_OCTOROTOR) {
 					current_status.flag_external_manual_override_ok = false;
 				} else {
 					current_status.flag_external_manual_override_ok = true;
@@ -1676,48 +1658,63 @@ int commander_thread_main(int argc, char *argv[])
 
 			if ((hrt_absolute_time() - sp_man.timestamp) < 100000) {
 
-				/*
-				 * Check if manual control modes have to be switched
-				 */
-				if (!isfinite(sp_man.manual_mode_switch)) {
+				// /*
+				//  * Check if manual control modes have to be switched
+				//  */
+				// if (!isfinite(sp_man.manual_mode_switch)) {
+				// 	printf("man mode sw not finite\n");
 
-					/* this switch is not properly mapped, set default */
-					if ((current_status.system_type == MAV_TYPE_QUADROTOR) ||
-						(current_status.system_type == MAV_TYPE_HEXAROTOR) ||
-						(current_status.system_type == MAV_TYPE_OCTOROTOR)) {
+				// 	/* this switch is not properly mapped, set default */
+				// 	if ((current_status.system_type == VEHICLE_TYPE_QUADROTOR) ||
+				// 		(current_status.system_type == VEHICLE_TYPE_HEXAROTOR) ||
+				// 		(current_status.system_type == VEHICLE_TYPE_OCTOROTOR)) {
 
-						/* assuming a rotary wing, fall back to SAS */
-						current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_SAS;
-					} else {
+				// 		/* assuming a rotary wing, fall back to SAS */
+				// 		current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_SAS;
+				// 		current_status.flag_control_attitude_enabled = true;
+				// 		current_status.flag_control_rates_enabled = true;
+				// 	} else {
 
-						/* assuming a fixed wing, fall back to direct pass-through */
-						current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_DIRECT;
-					}
+				// 		/* assuming a fixed wing, fall back to direct pass-through */
+				// 		current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_DIRECT;
+				// 		current_status.flag_control_attitude_enabled = false;
+				// 		current_status.flag_control_rates_enabled = false;
+				// 	}
 
-				} else if (sp_man.manual_sas_switch < -STICK_ON_OFF_LIMIT) {
+				// } else if (sp_man.manual_mode_switch < -STICK_ON_OFF_LIMIT) {
 
-					/* bottom stick position, set direct mode for vehicles supporting it */
-					if ((current_status.system_type == MAV_TYPE_QUADROTOR) ||
-						(current_status.system_type == MAV_TYPE_HEXAROTOR) ||
-						(current_status.system_type == MAV_TYPE_OCTOROTOR)) {
+				// 	/* bottom stick position, set direct mode for vehicles supporting it */
+				// 	if ((current_status.system_type == VEHICLE_TYPE_QUADROTOR) ||
+				// 		(current_status.system_type == VEHICLE_TYPE_HEXAROTOR) ||
+				// 		(current_status.system_type == VEHICLE_TYPE_OCTOROTOR)) {
 
-						/* assuming a rotary wing, fall back to SAS */
-						current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_SAS;
-					} else {
+				// 		/* assuming a rotary wing, fall back to SAS */
+				// 		current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_SAS;
+				// 		current_status.flag_control_attitude_enabled = true;
+				// 		current_status.flag_control_rates_enabled = true;
+				// 	} else {
 
-						/* assuming a fixed wing, fall back to direct pass-through */
-						current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_DIRECT;
-					}
+				// 		/* assuming a fixed wing, set to direct pass-through as requested */
+				// 		current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_DIRECT;
+				// 		current_status.flag_control_attitude_enabled = false;
+				// 		current_status.flag_control_rates_enabled = false;
+				// 	}
 
-				} else if (sp_man.manual_sas_switch > STICK_ON_OFF_LIMIT) {
+				// } else if (sp_man.manual_mode_switch > STICK_ON_OFF_LIMIT) {
 
-					/* top stick position, set SAS for all vehicle types */
-					current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_SAS;
+				// 	/* top stick position, set SAS for all vehicle types */
+				// 	current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_SAS;
+				// 	current_status.flag_control_attitude_enabled = true;
+				// 	current_status.flag_control_rates_enabled = true;
 
-				} else {
-					/* center stick position, set rate control */
-					current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_RATES;
-				}
+				// } else {
+				// 	/* center stick position, set rate control */
+				// 	current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_RATES;
+				// 	current_status.flag_control_attitude_enabled = false;
+				// 	current_status.flag_control_rates_enabled = true;
+				// }
+
+				// printf("man ctrl mode: %d\n", (int)current_status.manual_control_mode);
 
 				/*
 				 * Check if manual stability control modes have to be switched
@@ -1746,9 +1743,9 @@ int commander_thread_main(int argc, char *argv[])
 				 * Check if left stick is in lower left position --> switch to standby state.
 				 * Do this only for multirotors, not for fixed wing aircraft.
 				 */
-				if (((current_status.system_type == MAV_TYPE_QUADROTOR) ||
-					(current_status.system_type == MAV_TYPE_HEXAROTOR) ||
-					(current_status.system_type == MAV_TYPE_OCTOROTOR)
+				if (((current_status.system_type == VEHICLE_TYPE_QUADROTOR) ||
+					(current_status.system_type == VEHICLE_TYPE_HEXAROTOR) ||
+					(current_status.system_type == VEHICLE_TYPE_OCTOROTOR)
 					) &&
 					((sp_man.yaw < -STICK_ON_OFF_LIMIT)) &&
 					(sp_man.throttle < STICK_THRUST_RANGE * 0.2f)) {
@@ -1778,7 +1775,7 @@ int commander_thread_main(int argc, char *argv[])
 				if (sp_man.manual_override_switch > STICK_ON_OFF_LIMIT) {
 					/* enable manual override */
 					update_state_machine_mode_manual(stat_pub, &current_status, mavlink_fd);
-				} else {
+				} else if (sp_man.manual_override_switch < -STICK_ON_OFF_LIMIT) {
 					/* check auto mode switch for correct mode */
 					if (sp_man.auto_mode_switch > STICK_ON_OFF_LIMIT) {
 						/* enable stabilized mode */
@@ -1790,6 +1787,11 @@ int commander_thread_main(int argc, char *argv[])
 					} else {
 						update_state_machine_mode_hold(stat_pub, &current_status, mavlink_fd);
 					}
+				} else {
+					/* center stick position, set SAS for all vehicle types */
+					current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_SAS;
+					current_status.flag_control_attitude_enabled = true;
+					current_status.flag_control_rates_enabled = true;
 				}
 
 				/* handle the case where RC signal was regained */
