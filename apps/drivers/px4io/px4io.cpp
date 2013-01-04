@@ -578,10 +578,11 @@ PX4IO::io_send()
 	for (unsigned i = 0; i < _max_actuators; i++)
 		cmd.servo_command[i] = _outputs.output[i];
 
-	/* publish as we send */
-	_outputs.timestamp = hrt_absolute_time();
-	orb_publish(_primary_pwm_device ? ORB_ID_VEHICLE_CONTROLS : ORB_ID(actuator_outputs_1), _t_outputs, &_outputs);
-
+	if(!_vstatus.flag_hil_enabled) {
+		/* publish as we send */
+		_outputs.timestamp = hrt_absolute_time();
+		orb_publish(_primary_pwm_device ? ORB_ID_VEHICLE_CONTROLS : ORB_ID(actuator_outputs_1), _t_outputs, &_outputs);
+	}
 
 	/* update relays */
 	for (unsigned i = 0; i < PX4IO_RELAY_CHANNELS; i++)

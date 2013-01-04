@@ -271,7 +271,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 						
 						att_sp.roll_body = manual_sp.roll;
 						att_sp.pitch_body = manual_sp.pitch;
-						att_sp.yaw_body = 0;
+						att_sp.yaw_body = manual_sp.yaw;
 						att_sp.thrust = manual_sp.throttle;
 					}
 
