@@ -98,16 +98,11 @@ controls_main(void)
 		 */
 		unsigned rc_channels = system_state.rc_channels;
 
-		/*
-		 * Track if any input got an update in this round
-		 */
-		bool rc_updated;
-
 		if (fds[0].revents & POLLIN)
 			locked |= dsm_input();
+
 		if (fds[1].revents & POLLIN)
-			locked |= sbus_input(fds[1].fd, PX4IO_INPUT_CHANNELS, &system_state.rc_channel_data,
-				&system_state.rc_channels, &system_state.rc_channels_timestamp, &rc_updated);
+			locked |= sbus_input();
 
 		/*
 		 * If we don't have lock from one of the serial receivers,
@@ -137,16 +132,17 @@ controls_main(void)
 		 */
 		if ((hrt_absolute_time() - system_state.rc_channels_timestamp) > 200000) {
 
+			if (system_state.rc_channels > 0) {
+				/*
+				 * If the RC signal status (lost / present) has
+				 * just changed, request an update immediately.
+				 */
+				system_state.fmu_report_due = true;
+			}
+			
 			/* set the number of channels to zero - no inputs */
 			system_state.rc_channels = 0;
-			rc_updated = true;
 		}
-
-		/*
-		 * If there was a RC update OR the RC signal status (lost / present) has
-		 * just changed, request an update immediately.
-		 */
-		system_state.fmu_report_due |= rc_updated;
 
 		/*
 		 * PWM output updates are performed in addition on each comm update.
@@ -170,8 +166,10 @@ ppm_input(void)
 
 		/* PPM data exists, copy it */
 		system_state.rc_channels = ppm_decoded_channels;
-		for (unsigned i = 0; i < ppm_decoded_channels; i++)
+
+		for (unsigned i = 0; i < ppm_decoded_channels; i++) {
 			system_state.rc_channel_data[i] = ppm_buffer[i];
+		}
 
 		/* copy the timestamp and clear it */
 		system_state.rc_channels_timestamp = ppm_last_valid_decode;
@@ -181,5 +179,5 @@ ppm_input(void)
 
 		/* trigger an immediate report to the FMU */
 		system_state.fmu_report_due = true;
-	}	
+	}
 }

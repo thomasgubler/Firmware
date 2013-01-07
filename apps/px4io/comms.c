@@ -62,8 +62,7 @@
 #define FMU_MIN_REPORT_INTERVAL	  5000	/*  5ms */
 #define FMU_MAX_REPORT_INTERVAL	100000	/* 100ms */
 
-int frame_rx;
-int frame_bad;
+#define FMU_STATUS_INTERVAL	1000000	/* 100ms */
 
 static int			fmu_fd;
 static hx_stream_t		stream;
@@ -71,12 +70,17 @@ static struct px4io_report	report;
 
 static void			comms_handle_frame(void *arg, const void *buffer, size_t length);
 
+perf_counter_t			comms_rx_errors;
+
 static void
 comms_init(void)
 {
 	/* initialise the FMU interface */
 	fmu_fd = open("/dev/ttyS1", O_RDWR);
 	stream = hx_stream_init(fmu_fd, comms_handle_frame, NULL);
+
+	comms_rx_errors = perf_alloc(PC_COUNT, "rx_err");
+	hx_stream_set_counters(stream, 0, 0, comms_rx_errors);
 
 	/* default state in the report to FMU */
 	report.i2f_magic = I2F_MAGIC;
@@ -88,6 +92,9 @@ comms_init(void)
 	cfsetspeed(&t, 115200);
 	t.c_cflag &= ~(CSTOPB | PARENB);
 	tcsetattr(fmu_fd, TCSANOW, &t);
+
+	/* init the ADC */
+	adc_init();
 }
 
 void
@@ -111,6 +118,7 @@ comms_main(void)
 		if (fds.revents & POLLIN) {
 			char buf[32];
 			ssize_t count = read(fmu_fd, buf, sizeof(buf));
+
 			for (int i = 0; i < count; i++)
 				hx_stream_rx(stream, buf[i]);
 		}
@@ -124,7 +132,8 @@ comms_main(void)
 		/* should we send a report to the FMU? */
 		now = hrt_absolute_time();
 		delta = now - last_report_time;
-		if ((delta > FMU_MIN_REPORT_INTERVAL) && 
+
+		if ((delta > FMU_MIN_REPORT_INTERVAL) &&
 		    (system_state.fmu_report_due || (delta > FMU_MAX_REPORT_INTERVAL))) {
 
 			system_state.fmu_report_due = false;
@@ -138,8 +147,54 @@ comms_main(void)
 			report.channel_count = system_state.rc_channels;
 			report.armed = system_state.armed;
 
+			report.battery_mv = system_state.battery_mv;
+			report.adc_in = system_state.adc_in5;
+			report.overcurrent = system_state.overcurrent;
+
 			/* and send it */
 			hx_stream_send(stream, &report, sizeof(report));
+		}
+
+		/*
+		 * Fetch ADC values, check overcurrent flags, etc.
+		 */
+		static hrt_abstime last_status_time;
+
+		if ((now - last_status_time) > FMU_STATUS_INTERVAL) {
+
+			/*
+			 * Coefficients here derived by measurement of the 5-16V
+			 * range on one unit:
+			 *
+			 * V   counts
+			 *  5  1001
+			 *  6  1219
+			 *  7  1436
+			 *  8  1653
+			 *  9  1870
+			 * 10  2086
+			 * 11  2303
+			 * 12  2522
+			 * 13  2738
+			 * 14  2956
+			 * 15  3172
+			 * 16  3389
+			 *
+			 * slope = 0.0046067
+			 * intercept = 0.3863
+			 *
+			 * Intercept corrected for best results @ 12V.
+			 */
+			unsigned counts = adc_measure(ADC_VBATT);
+			system_state.battery_mv = (4150 + (counts * 46)) / 10;
+
+			system_state.adc_in5 = adc_measure(ADC_IN5);
+
+			system_state.overcurrent = 
+				(OVERCURRENT_SERVO ? (1 << 0) : 0) |
+				(OVERCURRENT_ACC   ? (1 << 1) : 0);
+
+			last_status_time = now;
 		}
 	}
 }
@@ -149,12 +204,22 @@ comms_handle_config(const void *buffer, size_t length)
 {
 	const struct px4io_config *cfg = (struct px4io_config *)buffer;
 
-	if (length != sizeof(*cfg)) {
-		frame_bad++;
+	if (length != sizeof(*cfg))
 		return;
+
+	/* fetch the rc mappings */
+	for (unsigned i = 0; i < 4; i++) {
+		system_state.rc_map[i] = cfg->rc_map[i];
 	}
 
-	frame_rx++;
+	/* fetch the rc channel attributes */ 
+	for (unsigned i = 0; i < 4; i++) {
+		system_state.rc_min[i]  = cfg->rc_min[i];
+		system_state.rc_trim[i] = cfg->rc_trim[i];
+		system_state.rc_max[i]  = cfg->rc_max[i];
+		system_state.rc_rev[i]  = cfg->rc_rev[i];
+		system_state.rc_dz[i]   = cfg->rc_dz[i];
+	}
 }
 
 static void
@@ -162,23 +227,18 @@ comms_handle_command(const void *buffer, size_t length)
 {
 	const struct px4io_command *cmd = (struct px4io_command *)buffer;
 
-	if (length != sizeof(*cmd)) {
-		frame_bad++;
+	if (length != sizeof(*cmd))
 		return;
-	}
-
-	frame_rx++;
+	
 	irqstate_t flags = irqsave();
 
 	/* fetch new PWM output values */
-	for (unsigned i = 0; i < PX4IO_OUTPUT_CHANNELS; i++) {
-		system_state.fmu_channel_data[i] = cmd->servo_command[i];
-	}
+	for (unsigned i = 0; i < PX4IO_CONTROL_CHANNELS; i++)
+		system_state.fmu_channel_data[i] = cmd->output_control[i];
 
-	/* if IO is armed and FMU gets disarmed, IO must also disarm */
-	if (system_state.arm_ok && !cmd->arm_ok) {
+	/* if the IO is armed and the FMU gets disarmed, the IO must also disarm */
+	if (system_state.arm_ok && !cmd->arm_ok)
 		system_state.armed = false;
-	}
 
 	system_state.arm_ok = cmd->arm_ok;
 	system_state.vector_flight_mode_ok = cmd->vector_flight_mode_ok;
@@ -228,11 +288,11 @@ comms_handle_command(const void *buffer, size_t length)
 				break;
 			}
 		}
+		system_state.relays[i] = cmd->relay_state[i];
 	}
 
 	irqrestore(flags);
 }
-
 
 static void
 comms_handle_frame(void *arg, const void *buffer, size_t length)
@@ -246,11 +306,16 @@ comms_handle_frame(void *arg, const void *buffer, size_t length)
 		case F2I_MAGIC:
 			comms_handle_command(buffer, length);
 			break;
+
 		case F2I_CONFIG_MAGIC:
 			comms_handle_config(buffer, length);
 			break;
+
+		case F2I_MIXER_MAGIC:
+			mixer_handle_text(buffer, length);
+			break;
+
 		default:
-		    	frame_bad++;
 			break;
 		}
 	}

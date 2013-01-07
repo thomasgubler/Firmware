@@ -31,9 +31,9 @@
  *
  ****************************************************************************/
 
- /**
-  * @file Safety button logic.
-  */
+/**
+ * @file Safety button logic.
+ */
 
 #include <nuttx/config.h>
 #include <stdio.h>
@@ -102,7 +102,7 @@ safety_init(void)
 static void
 safety_check_button(void *arg)
 {
-	/* 
+	/*
 	 * Debounce the safety button, change state if it has been held for long enough.
 	 *
 	 */
@@ -120,35 +120,43 @@ safety_check_button(void *arg)
 
 		if (counter < ARM_COUNTER_THRESHOLD) {
 			counter++;
+
 		} else if (counter == ARM_COUNTER_THRESHOLD) {
 			/* change to armed state and notify the FMU */
 			system_state.armed = true;
 			counter++;
 			system_state.fmu_report_due = true;
 		}
-	/* Disarm quickly */
+
+		/* Disarm quickly */
+
 	} else if (safety_button_pressed && system_state.armed) {
 
 		if (counter < ARM_COUNTER_THRESHOLD) {
 			counter++;
+
 		} else if (counter == ARM_COUNTER_THRESHOLD) {
 			/* change to disarmed state and notify the FMU */
 			system_state.armed = false;
 			counter++;
 			system_state.fmu_report_due = true;
 		}
+
 	} else {
 		counter = 0;
 	}
 
 	/* Select the appropriate LED flash pattern depending on the current IO/FMU arm state */
 	uint16_t pattern = LED_PATTERN_SAFE;
+
 	if (system_state.armed) {
 		if (system_state.arm_ok) {
 			pattern = LED_PATTERN_IO_FMU_ARMED;
+
 		} else {
 			pattern = LED_PATTERN_IO_ARMED;
 		}
+
 	} else if (system_state.arm_ok) {
 		pattern = LED_PATTERN_FMU_ARMED;
 	} else if (system_state.vector_flight_mode_ok) {
@@ -181,8 +189,10 @@ failsafe_blink(void *arg)
 	/* blink the failsafe LED if we don't have FMU input */
 	if (!system_state.mixer_fmu_available) {
 		failsafe = !failsafe;
+
 	} else {
 		failsafe = false;
 	}
+
 	LED_AMBER(failsafe);
 }
