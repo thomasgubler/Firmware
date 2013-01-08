@@ -436,4 +436,130 @@ __EXPORT float _wrap_360(float bearing)
 	return bearing;
 }
 
+__EXPORT void calculate_arc(struct planned_path_segments_s * arc,
+		float p1[2], float p2[2], float p3[2],
+		float r_min)
+{
+	//XXX: code documentation
+	//XXX: figure out how to use mathlib, write in c++?
+
+	/* find center */
+	float v_p2p1[2] = {p1[0] - p2[0], p1[1] - p2[1]};
+	float length = sqrtf(v_p2p1[0] * v_p2p1[0] + v_p2p1[1] * v_p2p1[1]);
+	float v_p2p1_n[2] = {v_p2p1[0]/length, v_p2p1[1]/length};
+
+	printf("v_p2p1_n %0.4f, %0.4f\n", (double)v_p2p1_n[0], (double)v_p2p1_n[1]);
+
+	float v_p2p3[2] = {p3[0] - p2[0], p3[1] - p2[1]};
+	length = sqrtf(v_p2p3[0] * v_p2p3[0] + v_p2p3[1] * v_p2p3[1]);
+	float v_p2p3_n[2] = {v_p2p3[0]/length, v_p2p3[1]/length};
+
+	printf("v_p2p3_n %0.4f, %0.4f\n", (double)v_p2p3_n[0], (double)v_p2p3_n[1]);
+
+	float dir_c[2] = {0.5f * (v_p2p1_n[0] + v_p2p3_n[0]), 0.5f * (v_p2p1_n[1] + v_p2p3_n[1])};
+	length = sqrtf(dir_c[0] * dir_c[0] + dir_c[1] * dir_c[1]);
+	float dir_c_n[2] = {dir_c[0]/length, dir_c[1]/length};
+
+	printf("dir_c_n %0.4f, %0.4f\n", (double)dir_c_n[0], (double)dir_c_n[1]);
+
+	float v_p2c[2] = {r_min * dir_c_n[0], r_min * dir_c_n[1]};
+	float c[2] = {p2[0] + v_p2c[0], p2[1] + v_p2c[1]};
+
+	printf("Center %0.4f, %0.4f\n", (double)c[0], (double)c[1]);
+
+	/* tangent from p1 to circle */
+	/* transform p_1 to c system */
+	float c_p1[2] = {p1[0] - v_p2c[0], p1[1] - v_p2c[1]};
+
+	float part1 = 1/(2*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1));
+	float part2 = 2 * r_min * r_min * c_p1[1] / (c_p1[0] * c_p1[0]);
+	float part3 = sqrtf( 4 * powf(r_min, 4) *  c_p1[1] * c_p1[1]  / powf(c_p1[0], 4) - 4*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1)*(powf(r_min, 4)/(c_p1[0]*c_p1[0]) - r_min * r_min)   );
+
+	float yt1 =  part1 * ( part2 + part3 );
+	float yt2 =  part1 * ( part2 - part3 );
+
+	float xt1 = (r_min * r_min - yt1*c_p1[1])/c_p1[0];
+	float xt2 = (r_min * r_min - yt2*c_p1[1])/c_p1[0];
+
+	/* transform back to p_2 system */
+	float Tp1_1[2] = {xt1 + v_p2c[0], yt1  + v_p2c[1]};
+	float Tp1_2[2] = {xt2 + v_p2c[0], yt2  + v_p2c[1]};
+
+	/* find correct tangent point (larger distance from OTHER waypoint */
+	float p3Tp1_1[2] = {Tp1_1[0] - p3[0], Tp1_1[1] - p3[1]};
+	float d1 = sqrtf(p3Tp1_1[0] * p3Tp1_1[0] + p3Tp1_1[1] * p3Tp1_1[1]);
+	float p3Tp1_2[2] = {Tp1_2[0] - p3[0], Tp1_2[1] - p3[1]};
+	float d2 = sqrtf(p3Tp1_2[0] * p3Tp1_2[0] + p3Tp1_2[1] * p3Tp1_2[1]);
+
+	float T1[2];
+	if(d2 > d1) {
+		T1[0] = Tp1_2[0];
+		T1[1] = Tp1_2[1];
+		printf("in Tangent point (2) %0.4f, %0.4f\n", (double)T1[0], (double)T1[1]);
+	} else {
+		T1[0] = Tp1_1[0];
+		T1[1] = Tp1_1[1];
+		printf("in Tangent point (1) %0.4f, %0.4f\n", (double)T1[0], (double)T1[1]);
+	}
+
+	float phi1 = atan2f(T1[1] - v_p2c[1], T1[0] - v_p2c[0]);
+	printf("phi1 %0.4f\n", (double)phi1);
+
+	/* end tangent p1 */
+
+	/* tangent from p3 to circle */ //XXX: a tired (and lazy) developer just copied the code block from above. Create function or use mathlib anyway... (work in progess)
+	/* transform p_3 to c system */
+	float c_p3[2] = {p3[0] - v_p2c[0], p3[1] - v_p2c[1]};
+
+	printf("c_p3 %0.4f, %0.4f\n", (double)c_p3[0], (double)c_p3[1]);
+
+	part1 = 1/(2*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1));
+	part2 = 2 * r_min * r_min * c_p3[1] / (c_p3[0] * c_p3[0]);
+	part3 = sqrtf( 4 * powf(r_min, 4) *  c_p3[1] * c_p3[1]  / powf(c_p3[0], 4) - 4*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1)*(powf(r_min, 4)/(c_p3[0]*c_p3[0]) - r_min * r_min)   );
+
+	yt1 =  part1 * ( part2 + part3 );
+	yt2 =  part1 * ( part2 - part3 );
+
+	printf("yt1 %0.4f, yt2 %0.4f\n", (double)yt1, (double)yt2);
+
+	xt1 = (r_min * r_min - yt1*c_p3[1])/c_p3[0];
+	xt2 = (r_min * r_min - yt2*c_p3[1])/c_p3[0];
+
+	printf("xt1 %0.4f, xt2 %0.4f\n", (double)xt1, (double)xt2);
+
+	/* transform back to p_2 system */
+	float Tp3_1[2] = {xt1 + v_p2c[0], yt1  + v_p2c[1]};
+	float Tp3_2[2] = {xt2 + v_p2c[0], yt2  + v_p2c[1]};
+
+	printf("Tp3_1 %0.4f, %0.4f\n", (double)Tp3_1[0], (double)Tp3_1[1]);
+	printf("Tp3_2 %0.4f, %0.4f\n", (double)Tp3_2[0], (double)Tp3_2[1]);
+
+	/* find correct tangent point (larger distance from OTHER waypoint */
+	float p1Tp1_1[2] = {Tp1_1[0] - p1[0], Tp1_1[1] - p1[1]};
+	d1 = sqrtf(p1Tp1_1[0] * p1Tp1_1[0] + p1Tp1_1[1] * p1Tp1_1[1]);
+	float p1Tp1_2[2] = {Tp1_2[0] - p1[0], Tp1_2[1] - p1[1]};
+	d2 = sqrtf(p1Tp1_2[0] * p1Tp1_2[0] + p1Tp1_2[1] * p1Tp1_2[1]);
+
+	float T3[2];
+	if(d2 > d1) {
+		T3[0] = Tp3_2[0];
+		T3[1] = Tp3_2[1];
+		printf("out Tangent point (2) %0.4f, %0.4f\n", (double)T3[0], (double)T3[1]);
+	} else {
+		T3[0] = Tp3_1[0];
+		T3[1] = Tp3_1[1];
+		printf("out Tangent point (1) %0.4f, %0.4f\n", (double)T3[0], (double)T3[1]);
+	}
+
+	float phi3 = atan2f(T3[1] - v_p2c[1], T3[0] - v_p2c[0]);
+	printf("phi3 %0.4f\n", (double)phi3);
+
+	/* end tangent p3 */
+
+
+
+
+
+}
+
 
