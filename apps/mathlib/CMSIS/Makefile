@@ -38,12 +38,19 @@
 #
 # Find sources
 #
-DSPLIB_SRCDIR		 = $(dir $(lastword $(MAKEFILE_LIST)))
+DSPLIB_SRCDIR		:= $(dir $(lastword $(MAKEFILE_LIST)))
 CSRCS			:= $(wildcard $(DSPLIB_SRCDIR)/DSP_Lib/Source/*/*.c)
 
 INCLUDES		+= $(DSPLIB_SRCDIR)/Include \
 			   $(DSPLIB_SRCDIR)/Device/ARM/ARMCM4/Include \
 			   $(DSPLIB_SRCDIR)/Device/ARM/ARMCM3/Include
+
+# Suppress some warnings that ARM should fix, but haven't.
+EXTRADEFINES		+= -Wno-unsuffixed-float-constants \
+			   -Wno-sign-compare \
+			   -Wno-shadow \
+			   -Wno-float-equal \
+			   -Wno-unused-variable
 
 #
 # Override the default visibility for symbols, since the CMSIS DSPLib doesn't

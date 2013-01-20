@@ -72,6 +72,7 @@ extern "C" {
 #define PITCH    1
 #define YAW      2
 #define THROTTLE 3
+#define OVERRIDE 4
 
 /* current servo arm/disarm state */
 bool mixer_servos_armed = false;
@@ -99,7 +100,6 @@ mixer_tick(void)
 		/* too many frames without FMU input, time to go to failsafe */
 		system_state.mixer_manual_override = true;
 		system_state.mixer_fmu_available = false;
-		lib_lowprintf("RX timeout\n");
 	}
 
 	/*
@@ -125,6 +125,7 @@ mixer_tick(void)
 			rc_channel_data[PITCH]    = system_state.rc_channel_data[system_state.rc_map[PITCH] - 1];
 			rc_channel_data[YAW]      = system_state.rc_channel_data[system_state.rc_map[YAW] - 1];
 			rc_channel_data[THROTTLE] = system_state.rc_channel_data[system_state.rc_map[THROTTLE] - 1];
+			//rc_channel_data[OVERRIDE] = system_state.rc_channel_data[system_state.rc_map[OVERRIDE] - 1];
 
 			/* get the remaining channels, no remapping needed */
 			for (unsigned i = 4; i < system_state.rc_channels; i++) {
