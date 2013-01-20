@@ -331,8 +331,8 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 		// TO DO - this is messed up and won't compile
 		float start_disp_x = radius * sin(arc_start_bearing);
 		float start_disp_y = radius * cos(arc_start_bearing);
-		float end_disp_x = radius * sin(_wrapPI(arc_start_bearing + arc_sweep));
-		float end_disp_y = radius * cos(_wrapPI(arc_start_bearing + arc_sweep));
+		float end_disp_x = radius * sin(_wrap_pi(arc_start_bearing + arc_sweep));
+		float end_disp_y = radius * cos(_wrap_pi(arc_start_bearing + arc_sweep));
 		float lon_start = lon_now + start_disp_x / 111111.0d;
 		float lat_start = lat_now + start_disp_y * cos(lat_now) / 111111.0d;
 		float lon_end = lon_now + end_disp_x / 111111.0d;
@@ -353,7 +353,7 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 
 	}
 
-	crosstrack_error->bearing = _wrapPI(crosstrack_error->bearing);
+	crosstrack_error->bearing = _wrap_pi(crosstrack_error->bearing);
 	return_value = OK;
 	return return_value;
 }
@@ -437,9 +437,18 @@ __EXPORT float _wrap_360(float bearing)
 }
 
 __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
-		float p1[2], float p2[2], float p3[2],
+		double lat1, double lon1, double lat2, double lon2, double lat3, double lon3,
 		float r_min)
 {
+	float p1[2];
+	float p2[2];
+	float p3[2];
+	map_projection_init(lat2, lon2);
+
+	map_projection_project(lat1, lon1, &(p1[0]), &(p1[1]));
+	map_projection_project(lat2, lon2, &(p2[0]), &(p2[1]));
+	map_projection_project(lat2, lon3, &(p3[0]), &(p3[1]));
+
 	//XXX: code documentation
 	//XXX: figure out how to use mathlib, write in c++?
 
@@ -556,6 +565,13 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 
 	/* end tangent p3 */
 
+	map_projection_reproject(c[0], c[1], &(arc->start_lat), &(arc->start_lon));
+	map_projection_reproject(T1[0], T1[1], &(arc->navpoint1_lat), &(arc->navpoint1_lon));
+	map_projection_reproject(T3[0], T3[1], &(arc->navpoint2_lat), &(arc->navpoint2_lon));
+
+	arc->arc_start_bearing = phi1;
+	arc->arc_sweep = phi3 - phi1;
+	arc->radius = r_min;
 
 
 

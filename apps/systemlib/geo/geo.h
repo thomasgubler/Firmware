@@ -64,6 +64,10 @@ struct planned_path_segments_s {
 	float arc_start_bearing;		// Bearing from center to start of arc
 	float arc_sweep;				// Angle (radians) swept out by arc around center.
 								// Positive for clockwise, negative for counter-clockwise
+	double navpoint1_lat;
+	double navpoint1_lon;
+	double navpoint2_lat;
+	double navpoint2_lon;
 };
 
 /**
@@ -117,9 +121,9 @@ __EXPORT float get_circle_bearing(float phi);
 
 
 /**
- * Calculates arc segment based on 3 points, expects points projected on a plane
+ * Calculates arc segment based on 3 points
  *
  */
 __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
-		float p1[2], float p2[2], float p3[2],
+		double lat1, double lon1, double lat2, double lon2, double lat3, double lon3,
 		float r_min);
