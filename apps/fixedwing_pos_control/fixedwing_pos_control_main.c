@@ -58,6 +58,7 @@
 #include <uORB/topics/vehicle_rates_setpoint.h>
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/parameter_update.h>
+#include <uORB/topics/vehicle_status.h>
 #include <systemlib/param/param.h>
 #include <systemlib/pid/pid.h>
 #include <systemlib/geo/geo.h>
@@ -196,6 +197,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		memset(&xtrack_err, 0, sizeof(xtrack_err));
 		struct parameter_update_s param_update;
 		memset(&param_update, 0, sizeof(param_update));
+		struct vehicle_status_s vehicle_status;
+		memset(&vehicle_status, 0, sizeof(vehicle_status));
 
 		/* output structs */
 		struct vehicle_attitude_setpoint_s attitude_setpoint;
@@ -213,6 +216,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		int global_setpoint_sub = orb_subscribe(ORB_ID(vehicle_global_position_setpoint));
 		int att_sub = orb_subscribe(ORB_ID(vehicle_attitude));
 		int param_sub = orb_subscribe(ORB_ID(parameter_update));
+		int vehicle_status_sub = orb_subscribe(ORB_ID(vehicle_status));
 
 		/* Setup of loop */
 		struct pollfd fds[2] = {
@@ -241,7 +245,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		pid_init(&altitude_controller, p.altitude_p, 0.0f, 0.0f, 0.0f, p.pitch_lim, PID_MODE_DERIVATIV_NONE);
 		pid_init(&offtrack_controller, p.xtrack_p, 0.0f, 0.0f, 0.0f , 60.0f*M_DEG_TO_RAD, PID_MODE_DERIVATIV_NONE); //TODO: remove hardcoded value
 
-		float r_min = 400; //V^2/(9.81*tan(roll_max) //XXX: remove hardcoded value
+		float r_min = 35.0f*35.0f/(9.81f*tanf(p.roll_lim)) + 10.0f; //V^2/(9.81*tan(roll_max) + margin //XXX: remove hardcoded value
 
 		/* Horizontal Navigation State */
 		typedef enum {
@@ -258,6 +262,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		/* error and performance monitoring */
 		perf_counter_t fw_interval_perf = perf_alloc(PC_INTERVAL, "fixedwing_pos_control_interval");
 		perf_counter_t fw_err_perf = perf_alloc(PC_COUNT, "fixedwing_pos_control_err");
+
+		bool wp_reached = false;
 
 		while(!thread_should_exit)
 		{
@@ -285,7 +291,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 					pid_set_parameters(&heading_rate_controller, p.headingr_p, p.headingr_i, 0, 0, p.roll_lim);
 					pid_set_parameters(&altitude_controller, p.altitude_p, 0, 0, 0, p.pitch_lim);
 					pid_set_parameters(&offtrack_controller, p.xtrack_p, 0, 0, 0, 60.0f*M_DEG_TO_RAD); //TODO: remove hardcoded value
-					r_min = 400; //V^2/(9.81*tan(roll_max) //XXX: remove hardcoded value
+					r_min = r_min = 35.0f*35.0f/(9.81f*tanf(p.roll_lim)) + 10.0f; //V^2/(9.81*tan(roll_max) + margin //XXX: remove hardcoded value
 				}
 
 				/* only run controller if attitude changed */
@@ -301,6 +307,11 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 					bool global_sp_updated;
 					orb_check(global_setpoint_sub, &global_sp_updated);
 
+					/* update vehicle status if necessary */
+					bool vehicle_status_updated;
+					orb_check(vehicle_status_sub, &vehicle_status_updated);
+					orb_copy(ORB_ID(vehicle_status), vehicle_status_sub, &vehicle_status);
+
 					/* load local copies */
 					orb_copy(ORB_ID(vehicle_attitude), att_sub, &att);
 
@@ -309,11 +320,12 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 						global_pos_set_once = true;
 					}
 
-					if (global_sp_updated && global_pos_set_once) {
+					if (global_sp_updated && global_pos_set_once && vehicle_status.flag_global_position_valid) {
 
 						/* waypoint reached */
 
 						orb_copy(ORB_ID(vehicle_global_position_setpoint), global_setpoint_sub, &global_setpoint);
+						wp_reached = true;
 						if(!global_sp_updated_set_once) {
 							/* init navigation */
 							/* load next wp to current_navigation_setpoint */
@@ -334,6 +346,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 								printf("arc.navpoint1_latlon: %0.4f, %0.4f \n", arc.navpoint1_lat, arc.navpoint1_lon);
 								printf("arc.navpoint2_latlon: %0.4f, %0.4f \n", arc.navpoint2_lat, arc.navpoint2_lon);
 								printf("arc.arc_start_bearing: %0.4f, arc.arc_sweep: %0.4f \n", arc.arc_start_bearing*180/M_PI, arc.arc_sweep*180/M_PI);
+
+								wp_reached = false;
 							}
 
 							psi_track = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
@@ -380,9 +394,9 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 //							}
 						} else if (horizontal_navigation_state == HNAV_ARC) {
 
-								distance_res = get_distance_to_arc(&xtrack_err, (double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
+							distance_res = get_distance_to_arc(&xtrack_err, (double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
 										arc.start_lat, arc.start_lon,
-										arc.radius, arc.arc_start_bearing, arc.arc_sweep);
+										arc.radius, arc.arc_start_bearing, arc.arc_sweep, wp_reached);
 
 							if(xtrack_err.past_end) {
 
@@ -411,7 +425,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 								psi_track = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
 																							(double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
-
+								wp_reached = false;
 
 								/* switch to line */
 								printf("switch to line\n");

@@ -167,7 +167,7 @@ void mavlink_wpm_send_setpoint(uint16_t seq)
 		mavlink_mission_item_t *cur = &(wpm->waypoints[seq]);
 		mavlink_missionlib_current_waypoint_changed(cur->seq, cur->param1,
 				cur->param2, cur->param3, cur->param4, cur->x,
-				cur->y, cur->z, cur->frame, cur->command, WP_NAV_GUIDE, 0, 0);
+				cur->y, cur->z, cur->frame, cur->command, WP_NAV_EXACT, 0, 0);
 
 		wpm->timestamp_last_send_setpoint = mavlink_missionlib_get_system_timestamp();
 

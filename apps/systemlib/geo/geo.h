@@ -105,7 +105,7 @@ __EXPORT float get_bearing_to_next_waypoint(double lat_now, double lon_now, doub
 __EXPORT int get_distance_to_line(struct crosstrack_error_s * crosstrack_error, double lat_now, double lon_now, double lat_start, double lon_start, double lat_end, double lon_end);
 
 __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, double lat_now, double lon_now, double lat_center, double lon_center,
-		float radius, float arc_start_bearing, float arc_sweep);
+		float radius, float arc_start_bearing, float arc_sweep, bool wp_reached);
 
 __EXPORT float _wrap_180(float bearing);
 __EXPORT float _wrap_360(float bearing);

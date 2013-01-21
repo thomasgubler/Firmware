@@ -262,7 +262,7 @@ __EXPORT int get_distance_to_line(struct crosstrack_error_s * crosstrack_error, 
 
 
 __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, double lat_now, double lon_now, double lat_center, double lon_center,
-		float radius, float arc_start_bearing, float arc_sweep)
+		float radius, float arc_start_bearing, float arc_sweep, bool wp_reached)
 {
 	// This function returns the distance to the nearest point on the track arc.  Distance is positive if current
 	// position is right of the arc and negative if left of the arc as seen from the closest point on the arc and
@@ -340,16 +340,8 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 		crosstrack_error->past_end = false;
 		float dist_to_center = fabs(get_distance_to_next_waypoint(lat_now, lon_now, lat_center, lon_center));
 
-		if (dist_to_center <= radius) {  //XXX: unnecessary if
-			crosstrack_error->distance = radius - dist_to_center;
-			crosstrack_error->bearing = bearing_now + M_PI_2_F;
-//			printf("in sector, in circle, distance: %0.4f\n", crosstrack_error->distance);
-
-		} else {
-			crosstrack_error->distance = radius - dist_to_center;
-			crosstrack_error->bearing = bearing_now + M_PI_2_F;
-//			printf("in sector, out of ciorcle, distance: %0.4f\n", crosstrack_error->distance);
-		}
+		crosstrack_error->distance = radius - dist_to_center;
+		crosstrack_error->bearing = bearing_now + M_PI_2_F;
 
 		if (arc_sweep < 0) {
 			crosstrack_error->distance *= -1;
@@ -382,13 +374,30 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 		if (dist_to_start < dist_to_end) {
 			printf("out of sector, near start\n");
 			crosstrack_error->distance = dist_to_start;
+			if (wp_reached) {
+				crosstrack_error->past_end = true;
+			}
 			crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_start, lon_start);
 
 		} else {
-			printf("out of sector, near end\n");
-			crosstrack_error->past_end = true;
-			crosstrack_error->distance = dist_to_end;
-			crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_end, lon_end);
+			if (wp_reached) {
+				printf("out of sector, near end, wp reached\n");
+				crosstrack_error->past_end = true;
+				crosstrack_error->distance = dist_to_end;
+				crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_end, lon_end);
+			} else { //try to reach the waypoint again
+				printf("out of sector, near end, wp not yet reached new try\n");
+
+				float dist_to_center = fabs(get_distance_to_next_waypoint(lat_now, lon_now, lat_center, lon_center));
+				crosstrack_error->distance = radius - dist_to_center;
+				crosstrack_error->bearing = bearing_now + M_PI_2_F;
+
+				if (arc_sweep < 0) {
+					crosstrack_error->distance *= -1;
+					crosstrack_error->bearing -= M_PI_F;
+				}
+			}
+
 		}
 
 	}
@@ -536,7 +545,14 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 
 		float part1 = 1/(2*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1));
 		float part2 = 2 * r_min * r_min * c_p1[1] / (c_p1[0] * c_p1[0]);
-		float part3 = sqrtf( 4 * powf(r_min, 4) *  c_p1[1] * c_p1[1]  / powf(c_p1[0], 4) - 4*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1)*(powf(r_min, 4)/(c_p1[0]*c_p1[0]) - r_min * r_min)   );
+		float discriminant = 4 * powf(r_min, 4) *  c_p1[1] * c_p1[1]  / powf(c_p1[0], 4) - 4*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1)*(powf(r_min, 4)/(c_p1[0]*c_p1[0]) - r_min * r_min);
+		float part3;
+		if(discriminant >= 0) {
+			part3 = sqrtf( discriminant );
+		} else {
+			printf("FW NAVIGATION ERROR: DISCRIMINANT < 0\n");
+			return;
+		}
 
 		float yt1 =  part1 * ( part2 + part3 );
 		float yt2 =  part1 * ( part2 - part3 );
@@ -580,7 +596,14 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 
 		part1 = 1/(2*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1));
 		part2 = 2 * r_min * r_min * c_p3[1] / (c_p3[0] * c_p3[0]);
-		part3 = sqrtf( 4 * powf(r_min, 4) *  c_p3[1] * c_p3[1]  / powf(c_p3[0], 4) - 4*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1)*(powf(r_min, 4)/(c_p3[0]*c_p3[0]) - r_min * r_min)   );
+		discriminant = 4 * powf(r_min, 4) *  c_p3[1] * c_p3[1]  / powf(c_p3[0], 4) - 4*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1)*(powf(r_min, 4)/(c_p3[0]*c_p3[0]) - r_min * r_min);
+
+		if(discriminant >= 0) {
+			part3 = sqrtf( discriminant );
+		} else {
+			printf("FW NAVIGATION ERROR: DISCRIMINANT < 0\n");
+			return;
+		}
 
 		yt1 =  part1 * ( part2 + part3 );
 		yt2 =  part1 * ( part2 - part3 );
