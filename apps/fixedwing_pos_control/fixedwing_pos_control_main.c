@@ -220,6 +220,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 			{ .fd = att_sub, .events = POLLIN }
 		};
 		bool global_sp_updated_set_once = false;
+		bool global_pos_set_once = true;
 
 		float psi_track = 0.0f;
 
@@ -239,6 +240,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		pid_init(&heading_rate_controller, p.headingr_p, p.headingr_i, 0.0f, 0.0f, p.roll_lim, PID_MODE_DERIVATIV_NONE);
 		pid_init(&altitude_controller, p.altitude_p, 0.0f, 0.0f, 0.0f, p.pitch_lim, PID_MODE_DERIVATIV_NONE);
 		pid_init(&offtrack_controller, p.xtrack_p, 0.0f, 0.0f, 0.0f , 60.0f*M_DEG_TO_RAD, PID_MODE_DERIVATIV_NONE); //TODO: remove hardcoded value
+
+		float r_min = 400; //V^2/(9.81*tan(roll_max) //XXX: remove hardcoded value
 
 		/* Horizontal Navigation State */
 		typedef enum {
@@ -261,6 +264,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 			/* wait for a sensor update, check for exit condition every 500 ms */
 			int ret = poll(fds, 2, 500);
 
+			static int counter = 0;
+
 			if (ret < 0) {
 				/* poll error, count it in perf */
 				perf_count(fw_err_perf);
@@ -280,6 +285,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 					pid_set_parameters(&heading_rate_controller, p.headingr_p, p.headingr_i, 0, 0, p.roll_lim);
 					pid_set_parameters(&altitude_controller, p.altitude_p, 0, 0, 0, p.pitch_lim);
 					pid_set_parameters(&offtrack_controller, p.xtrack_p, 0, 0, 0, 60.0f*M_DEG_TO_RAD); //TODO: remove hardcoded value
+					r_min = 400; //V^2/(9.81*tan(roll_max) //XXX: remove hardcoded value
 				}
 
 				/* only run controller if attitude changed */
@@ -300,9 +306,10 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 					if (pos_updated) {
 						orb_copy(ORB_ID(vehicle_global_position), global_pos_sub, &global_pos);
+						global_pos_set_once = true;
 					}
 
-					if (global_sp_updated) {
+					if (global_sp_updated && global_pos_set_once) {
 
 						/* waypoint reached */
 
@@ -316,25 +323,29 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 							/* check if next wp is a navigation wp -> if yes calculate arc */
 							if(global_setpoint.waypoint_navigation == WP_NAV_GUIDE) {
 								printf("calculating arc");
-								float r_min = 300;//XXX depends on max roll
 								calculate_arc(&arc,
 										(double)start_pos.lat / (double)1e7d, (double)start_pos.lon / (double)1e7d, (double)global_setpoint.lat / (double)1e7d, (double)global_setpoint.lon / (double)1e7d, (double)global_setpoint.lat_next / (double)1e7d, (double)global_setpoint.lon_next / (double)1e7d,
 										r_min);
 
 								current_navigation_setpoint.lat = arc.navpoint1_lat * 1e7d;
 								current_navigation_setpoint.lon = arc.navpoint1_lon * 1e7d;
+
+								printf("center latlon: %0.4f, %0.4f \n", arc.start_lat, arc.start_lon);
+								printf("arc.navpoint1_latlon: %0.4f, %0.4f \n", arc.navpoint1_lat, arc.navpoint1_lon);
+								printf("arc.navpoint2_latlon: %0.4f, %0.4f \n", arc.navpoint2_lat, arc.navpoint2_lon);
+								printf("arc.arc_start_bearing: %0.4f, arc.arc_sweep: %0.4f \n", arc.arc_start_bearing*180/M_PI, arc.arc_sweep*180/M_PI);
 							}
 
 							psi_track = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
 																						(double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
-
+							printf("next navigation point direction: %0.4f deg\n", (double)psi_track * 180.0 / M_PI);
 
 
 						}
 
 						global_sp_updated_set_once = true;
 
-						printf("next wp direction: %0.4f\n", (double)psi_track);
+
 					}
 
 					/* Simple Horizontal Control */
@@ -376,21 +387,26 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 							if(xtrack_err.past_end) {
 
 								/* load next wp to current_navigation_setpoint */
-								start_pos.lat = current_navigation_setpoint.lat; //current start position is old goal/waypoint
-								start_pos.lon = current_navigation_setpoint.lon;
-								start_pos.alt = current_navigation_setpoint.altitude;
+//								start_pos.lat = current_navigation_setpoint.lat; //current start position is old goal/waypoint
+//								start_pos.lon = current_navigation_setpoint.lon;
+//								start_pos.alt = current_navigation_setpoint.altitude;
+								start_pos = global_pos; //for now using the current position as the startpoint (= approx. last waypoint because the setpoint switch occurs at the waypoint)
 								current_navigation_setpoint = global_setpoint;
 
 								/* check if next wp is a navigation wp -> if yes calculate arc */
 								if(global_setpoint.waypoint_navigation == WP_NAV_GUIDE) {
-									printf("calculating arc");
-									float r_min = 300;//XXX depends on max roll
+									printf("calculating arc\n");
 									calculate_arc(&arc,
 											(double)start_pos.lat / (double)1e7d, (double)start_pos.lon / (double)1e7d, (double)global_setpoint.lat / (double)1e7d, (double)global_setpoint.lon / (double)1e7d, (double)global_setpoint.lat_next / (double)1e7d, (double)global_setpoint.lon_next / (double)1e7d,
 											r_min);
 
 									current_navigation_setpoint.lat = arc.navpoint1_lat * 1e7d;
 									current_navigation_setpoint.lon = arc.navpoint1_lon * 1e7d;
+
+									printf("center latlon: %0.4f, %0.4f \n", arc.start_lat, arc.start_lon);
+									printf("arc.navpoint1_latlon: %0.4f, %0.4f \n", arc.navpoint1_lat, arc.navpoint1_lon);
+									printf("arc.navpoint2_latlon: %0.4f, %0.4f \n", arc.navpoint2_lat, arc.navpoint2_lon);
+									printf("arc.arc_start_bearing: %0.4f, arc.arc_sweep: %0.4f \n", arc.arc_start_bearing*180/M_PI, arc.arc_sweep*180/M_PI);
 								}
 
 								psi_track = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
@@ -404,10 +420,19 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 						}
 
 						if(distance_res == OK /*&& !xtrack_err.past_end*/) {
+//							if (counter % 10 == 0) {
+//								printf("distance = %0.4f\n",  xtrack_err.distance);
+//							}
 
 							float delta_psi_c = pid_calculate(&offtrack_controller, 0, xtrack_err.distance, 0.0f, 0.0f); //p.xtrack_p * xtrack_err.distance
 
-							float psi_c = psi_track + delta_psi_c;
+							float psi_c;
+							if (horizontal_navigation_state == HNAV_ARC) {
+								psi_c = xtrack_err.bearing + delta_psi_c; //follow the circle
+							} else {
+								psi_c = psi_track + delta_psi_c; //following the track bearing
+							}
+
 							float psi_e = psi_c - att.yaw;
 
 							/* wrap difference back onto -pi..pi range */
@@ -415,6 +440,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 							if (verbose) {
 								printf("xtrack_err.distance %.4f ", (double)xtrack_err.distance);
+								printf("xtrack_err.bearing %.4f ", (double)xtrack_err.bearing);
+								printf("psi_track %.4f ", (double)psi_track);
 								printf("delta_psi_c %.4f ", (double)delta_psi_c);
 								printf("psi_c %.4f ", (double)psi_c);
 								printf("att.yaw %.4f ", (double)att.yaw);
@@ -495,6 +522,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 					}
 				}
 			}
+
+			counter++;
 		}
 
 		printf("[fixedwing_pos_control] exiting.\n");

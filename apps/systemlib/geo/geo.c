@@ -272,52 +272,90 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 	// to the arc start and the line from the center to the arc end
 	float	bearing_sector_start;
 	float	bearing_sector_end;
-	float	bearing_now = get_bearing_to_next_waypoint(lat_now, lon_now, lat_center, lon_center);
+	float	bearing_now = _wrap_2pi(get_bearing_to_next_waypoint(lat_center, lon_center, lat_now, lon_now)); //note: the position of the arguments is like this because we want to know the bearing of the curent position
 	bool	in_sector;
 
 	int return_value = ERROR;		// Set error flag, cleared when valid result calculated.
 	crosstrack_error->past_end = false;
 	crosstrack_error->distance = 0.0f;
 	crosstrack_error->bearing = 0.0f;
+	static int counter = 0;
+//	if(counter % 20 == 0) {
+//		printf("radius: %0.4f, [deg]: arc_start_bearing: %0.4f, arc_sweep: %0.4f, bearing_now: %0.4f\n", (double)radius, (double)arc_start_bearing*180.0/M_PI, (double)arc_sweep*180.0/M_PI, (double)bearing_now*180.0/M_PI);
+//	}
 
+	counter++;
 	// Return error if arguments are bad
 	if (lat_now == 0.0d || lon_now == 0.0d || lat_center == 0.0d || lon_center == 0.0d || radius == 0.0d) return return_value;
 
 
-	if (arc_sweep >= 0) {
-		bearing_sector_start = arc_start_bearing;
-		bearing_sector_end = arc_start_bearing + arc_sweep;
+//	if (arc_sweep >= 0) {
+		bearing_sector_start = _wrap_2pi(arc_start_bearing);
+		bearing_sector_end =_wrap_2pi(arc_start_bearing + arc_sweep);
+//		printf("[deg] bearing_sector_start: %0.4f, bearing_sector_end: %0.4f\n", (double)bearing_sector_start*180.0/M_PI, (double)bearing_sector_end*180.0/M_PI);
 
-		if (bearing_sector_end > 2.0f * M_PI_F) bearing_sector_end -= M_TWOPI_F;
-
-	} else {
-		bearing_sector_end = arc_start_bearing;
-		bearing_sector_start = arc_start_bearing - arc_sweep;
-
-		if (bearing_sector_start < 0.0f) bearing_sector_start += M_TWOPI_F;
-	}
+//		if (bearing_sector_end > 2.0f * M_PI_F) bearing_sector_end -= M_TWOPI_F;
+//
+//	} else {
+//		bearing_sector_end = arc_start_bearing;
+//		bearing_sector_start = arc_start_bearing - arc_sweep;
+//
+//		if (bearing_sector_start < 0.0f) bearing_sector_start += M_TWOPI_F;
+//	}
 
 	in_sector = false;
 
-	// Case where sector does not span zero
-	if (bearing_sector_end >= bearing_sector_start && bearing_now >= bearing_sector_start && bearing_now <= bearing_sector_end) in_sector = true;
+	if ( arc_sweep  >= 0 ) {
 
-	// Case where sector does span zero
-	if (bearing_sector_end < bearing_sector_start && (bearing_now > bearing_sector_start || bearing_now < bearing_sector_end)) in_sector = true;
+		if (bearing_sector_end >= bearing_sector_start && bearing_now >= bearing_sector_start && bearing_now <= bearing_sector_end) {
+			in_sector = true;
+		} else if (bearing_sector_end < bearing_sector_start && (bearing_now >= bearing_sector_start || bearing_now <= bearing_sector_start)) {
+			in_sector = true;
+		}
+	} else {
+		if (bearing_sector_end <= bearing_sector_start && bearing_now <= bearing_sector_start && bearing_now >= bearing_sector_end ) {
+			in_sector = true;
+		} else if (bearing_sector_end > bearing_sector_start && (bearing_now <= bearing_sector_start || bearing_now >= bearing_sector_end )) {
+			in_sector = true;
+		}
+
+
+	}
+
+//	// Case where sector does not span zero
+//	if (bearing_sector_end >= bearing_sector_start && bearing_now >= bearing_sector_start && bearing_now <= bearing_sector_end) {
+//			in_sector = true;
+//
+//	}
+//
+//	// Case where sector does span zero
+//	if (bearing_sector_end < bearing_sector_start && (bearing_now > bearing_sector_start || bearing_now < bearing_sector_end)){
+//			in_sector = true;
+//	}
 
 	// If in the sector then calculate distance and bearing to closest point
 	if (in_sector) {
-		crosstrack_error->past_end = false;
-		float dist_to_center = get_distance_to_next_waypoint(lat_now, lon_now, lat_center, lon_center);
 
-		if (dist_to_center <= radius) {
+
+		crosstrack_error->past_end = false;
+		float dist_to_center = fabs(get_distance_to_next_waypoint(lat_now, lon_now, lat_center, lon_center));
+
+		if (dist_to_center <= radius) {  //XXX: unnecessary if
 			crosstrack_error->distance = radius - dist_to_center;
-			crosstrack_error->bearing = bearing_now + M_PI_F;
+			crosstrack_error->bearing = bearing_now + M_PI_2_F;
+//			printf("in sector, in circle, distance: %0.4f\n", crosstrack_error->distance);
 
 		} else {
-			crosstrack_error->distance = dist_to_center - radius;
-			crosstrack_error->bearing = bearing_now;
+			crosstrack_error->distance = radius - dist_to_center;
+			crosstrack_error->bearing = bearing_now + M_PI_2_F;
+//			printf("in sector, out of ciorcle, distance: %0.4f\n", crosstrack_error->distance);
 		}
+
+		if (arc_sweep < 0) {
+			crosstrack_error->distance *= -1;
+			crosstrack_error->bearing -= M_PI_F;
+		}
+
 
 		// If out of the sector then calculate dist and bearing to start or end point
 
@@ -342,10 +380,12 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 
 
 		if (dist_to_start < dist_to_end) {
+			printf("out of sector, near start\n");
 			crosstrack_error->distance = dist_to_start;
 			crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_start, lon_start);
 
 		} else {
+			printf("out of sector, near end\n");
 			crosstrack_error->past_end = true;
 			crosstrack_error->distance = dist_to_end;
 			crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_end, lon_end);
@@ -354,6 +394,7 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 	}
 
 	crosstrack_error->bearing = _wrap_pi(crosstrack_error->bearing);
+//	printf("crosstrack_error->bearing: %0.4f deg\n", (double)crosstrack_error->bearing * 180.0 / M_PI);
 	return_value = OK;
 	return return_value;
 }
@@ -447,10 +488,19 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 
 	map_projection_project(lat1, lon1, &(p1[0]), &(p1[1]));
 	map_projection_project(lat2, lon2, &(p2[0]), &(p2[1]));
-	map_projection_project(lat2, lon3, &(p3[0]), &(p3[1]));
+	map_projection_project(lat3, lon3, &(p3[0]), &(p3[1]));
 
 	//XXX: code documentation
 	//XXX: figure out how to use mathlib, write in c++?
+
+	//XXX printfs for testing
+	printf("latlon1 %0.4f, %0.4f\n", (double)lat1, (double)lon1);
+	printf("latlon2 %0.4f, %0.4f\n", (double)lat2, (double)lon2);
+	printf("latlon3 %0.4f, %0.4f\n", (double)lat3, (double)lon3);
+	printf("p1 %0.4f, %0.4f\n", (double)p1[0], (double)p1[1]);
+	printf("p2 %0.4f, %0.4f\n", (double)p2[0], (double)p2[1]);
+	printf("p3 %0.4f, %0.4f\n", (double)p3[0], (double)p3[1]);
+
 
 	/* find center */
 	float v_p2p1[2] = {p1[0] - p2[0], p1[1] - p2[1]};
@@ -476,102 +526,138 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 
 	printf("Center %0.4f, %0.4f\n", (double)c[0], (double)c[1]);
 
-	/* tangent from p1 to circle */
-	/* transform p_1 to c system */
-	float c_p1[2] = {p1[0] - v_p2c[0], p1[1] - v_p2c[1]};
+	/* check that current p1 is outside circle */
+	float v_p1c[2] = {c[0] - p1[0], c[1] - p1[1]};
+	if (r_min < sqrtf(v_p1c[0]*v_p1c[0] + v_p1c[1]*v_p1c[1])) {
 
-	float part1 = 1/(2*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1));
-	float part2 = 2 * r_min * r_min * c_p1[1] / (c_p1[0] * c_p1[0]);
-	float part3 = sqrtf( 4 * powf(r_min, 4) *  c_p1[1] * c_p1[1]  / powf(c_p1[0], 4) - 4*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1)*(powf(r_min, 4)/(c_p1[0]*c_p1[0]) - r_min * r_min)   );
+		/* tangent from p1 to circle */
+		/* transform p_1 to c system */
+		float c_p1[2] = {p1[0] - v_p2c[0], p1[1] - v_p2c[1]};
 
-	float yt1 =  part1 * ( part2 + part3 );
-	float yt2 =  part1 * ( part2 - part3 );
+		float part1 = 1/(2*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1));
+		float part2 = 2 * r_min * r_min * c_p1[1] / (c_p1[0] * c_p1[0]);
+		float part3 = sqrtf( 4 * powf(r_min, 4) *  c_p1[1] * c_p1[1]  / powf(c_p1[0], 4) - 4*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1)*(powf(r_min, 4)/(c_p1[0]*c_p1[0]) - r_min * r_min)   );
 
-	float xt1 = (r_min * r_min - yt1*c_p1[1])/c_p1[0];
-	float xt2 = (r_min * r_min - yt2*c_p1[1])/c_p1[0];
+		float yt1 =  part1 * ( part2 + part3 );
+		float yt2 =  part1 * ( part2 - part3 );
 
-	/* transform back to p_2 system */
-	float Tp1_1[2] = {xt1 + v_p2c[0], yt1  + v_p2c[1]};
-	float Tp1_2[2] = {xt2 + v_p2c[0], yt2  + v_p2c[1]};
+		float xt1 = (r_min * r_min - yt1*c_p1[1])/c_p1[0];
+		float xt2 = (r_min * r_min - yt2*c_p1[1])/c_p1[0];
 
-	/* find correct tangent point (larger distance from OTHER waypoint */
-	float p3Tp1_1[2] = {Tp1_1[0] - p3[0], Tp1_1[1] - p3[1]};
-	float d1 = sqrtf(p3Tp1_1[0] * p3Tp1_1[0] + p3Tp1_1[1] * p3Tp1_1[1]);
-	float p3Tp1_2[2] = {Tp1_2[0] - p3[0], Tp1_2[1] - p3[1]};
-	float d2 = sqrtf(p3Tp1_2[0] * p3Tp1_2[0] + p3Tp1_2[1] * p3Tp1_2[1]);
+		/* transform back to p_2 system */
+		float Tp1_1[2] = {xt1 + v_p2c[0], yt1  + v_p2c[1]};
+		float Tp1_2[2] = {xt2 + v_p2c[0], yt2  + v_p2c[1]};
 
-	float T1[2];
-	if(d2 > d1) {
-		T1[0] = Tp1_2[0];
-		T1[1] = Tp1_2[1];
-		printf("in Tangent point (2) %0.4f, %0.4f\n", (double)T1[0], (double)T1[1]);
+		/* find correct tangent point (smaller distance from p2) */
+		float p2Tp1_1[2] = {Tp1_1[0] - p2[0], Tp1_1[1] - p2[1]};
+		float d1 = sqrtf(p2Tp1_1[0] * p2Tp1_1[0] + p2Tp1_1[1] * p2Tp1_1[1]);
+		float p2Tp1_2[2] = {Tp1_2[0] - p2[0], Tp1_2[1] - p2[1]};
+		float d2 = sqrtf(p2Tp1_2[0] * p2Tp1_2[0] + p2Tp1_2[1] * p2Tp1_2[1]);
+
+		printf("d1 %0.4f, d2 %0.4f\n", d1, d2);
+
+		float T1[2];
+		if(d2 < d1) {
+			T1[0] = Tp1_2[0];
+			T1[1] = Tp1_2[1];
+			printf("in Tangent point (2) %0.4f, %0.4f\n", (double)T1[0], (double)T1[1]);
+		} else {
+			T1[0] = Tp1_1[0];
+			T1[1] = Tp1_1[1];
+			printf("in Tangent point (1) %0.4f, %0.4f\n", (double)T1[0], (double)T1[1]);
+		}
+
+		float phi1 = atan2f(T1[1] - v_p2c[1], T1[0] - v_p2c[0]);
+		printf("phi1 %0.4f\n", (double)phi1);
+
+		/* end tangent p1 */
+
+		/* tangent from p3 to circle */ //XXX: a tired (and lazy) developer just copied the code block from above. Create function or use mathlib anyway... (work in progess)
+		/* transform p_3 to c system */
+		float c_p3[2] = {p3[0] - v_p2c[0], p3[1] - v_p2c[1]};
+
+		printf("c_p3 %0.4f, %0.4f\n", (double)c_p3[0], (double)c_p3[1]);
+
+		part1 = 1/(2*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1));
+		part2 = 2 * r_min * r_min * c_p3[1] / (c_p3[0] * c_p3[0]);
+		part3 = sqrtf( 4 * powf(r_min, 4) *  c_p3[1] * c_p3[1]  / powf(c_p3[0], 4) - 4*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1)*(powf(r_min, 4)/(c_p3[0]*c_p3[0]) - r_min * r_min)   );
+
+		yt1 =  part1 * ( part2 + part3 );
+		yt2 =  part1 * ( part2 - part3 );
+
+		printf("yt1 %0.4f, yt2 %0.4f\n", (double)yt1, (double)yt2);
+
+		xt1 = (r_min * r_min - yt1*c_p3[1])/c_p3[0];
+		xt2 = (r_min * r_min - yt2*c_p3[1])/c_p3[0];
+
+		printf("xt1 %0.4f, xt2 %0.4f\n", (double)xt1, (double)xt2);
+
+		/* transform back to p_2 system */
+		float Tp3_1[2] = {xt1 + v_p2c[0], yt1  + v_p2c[1]};
+		float Tp3_2[2] = {xt2 + v_p2c[0], yt2  + v_p2c[1]};
+
+		printf("Tp3_1 %0.4f, %0.4f\n", (double)Tp3_1[0], (double)Tp3_1[1]);
+		printf("Tp3_2 %0.4f, %0.4f\n", (double)Tp3_2[0], (double)Tp3_2[1]);
+
+		/* find correct tangent point (smaller distance from p2 */
+		float p2Tp3_1[2] = {Tp3_1[0] - p2[0], Tp3_1[1] - p2[1]};
+		d1 = sqrtf(p2Tp3_1[0] * p2Tp3_1[0] + p2Tp3_1[1] * p2Tp3_1[1]);
+		float p2Tp3_2[2] = {Tp3_2[0] - p2[0], Tp3_2[1] - p2[1]};
+		d2 = sqrtf(p2Tp3_2[0] * p2Tp3_2[0] + p2Tp3_2[1] * p2Tp3_2[1]);
+
+		printf("d1 %0.4f, d2 %0.4f\n", d1, d2);
+
+		float T3[2];
+		if(d2 < d1) {
+			T3[0] = Tp3_2[0];
+			T3[1] = Tp3_2[1];
+			printf("out Tangent point (2) %0.4f, %0.4f\n", (double)T3[0], (double)T3[1]);
+		} else {
+			T3[0] = Tp3_1[0];
+			T3[1] = Tp3_1[1];
+			printf("out Tangent point (1) %0.4f, %0.4f\n", (double)T3[0], (double)T3[1]);
+		}
+
+		float phi3 = atan2f(T3[1] - v_p2c[1], T3[0] - v_p2c[0]);
+		printf("phi3 %0.4f\n", (double)phi3);
+
+		/* end tangent p3 */
+
+		map_projection_reproject(c[0], c[1], &(arc->start_lat), &(arc->start_lon));
+		map_projection_reproject(T1[0], T1[1], &(arc->navpoint1_lat), &(arc->navpoint1_lon));
+		map_projection_reproject(T3[0], T3[1], &(arc->navpoint2_lat), &(arc->navpoint2_lon));
+
+		arc->arc_start_bearing = phi1;
+		/* get bearing of p2 to calculate correct direction */
+		float phi2 = atan2f(-v_p2c[1], -v_p2c[0]);
+
+		phi1 = _wrap_2pi(phi1);
+		phi2 = _wrap_2pi(phi2);
+		phi3 = _wrap_2pi(phi3);
+
+		printf("[deg] phi1 %0.4f, phi2 %0.4f, phi3 %0.4f\n", (double)phi1*180.0/M_PI, (double)phi2*180.0/M_PI, (double)phi3*180.0/M_PI);
+
+		if (phi3 >= phi1 && phi2 <= phi3) { //clockwise
+			arc->arc_sweep = phi3 - phi1;
+		} else if (phi3 >= phi1 && phi2 > phi3) { //counter clockwise
+			arc->arc_sweep = -(M_TWOPI_F  - (phi3 - phi1));
+		} else if (phi3 < phi1 && phi2 <= phi1) { //clockwise
+			arc->arc_sweep = phi1 - phi3;
+		} else if (phi3 < phi1 && phi2 > phi1) { //counter clockwise
+			arc->arc_sweep = -(M_TWOPI_F  - (phi1 - phi3));
+		}
+
+
+
+
+//		if(arc->arc_sweep < 0) {
+//			arc->arc_sweep += M_TWOPI_F;
+//		}
+		arc->radius = r_min;
 	} else {
-		T1[0] = Tp1_1[0];
-		T1[1] = Tp1_1[1];
-		printf("in Tangent point (1) %0.4f, %0.4f\n", (double)T1[0], (double)T1[1]);
+		//XXX: handle this...
+		printf("NAVIGATION ERROR\n");
 	}
-
-	float phi1 = atan2f(T1[1] - v_p2c[1], T1[0] - v_p2c[0]);
-	printf("phi1 %0.4f\n", (double)phi1);
-
-	/* end tangent p1 */
-
-	/* tangent from p3 to circle */ //XXX: a tired (and lazy) developer just copied the code block from above. Create function or use mathlib anyway... (work in progess)
-	/* transform p_3 to c system */
-	float c_p3[2] = {p3[0] - v_p2c[0], p3[1] - v_p2c[1]};
-
-	printf("c_p3 %0.4f, %0.4f\n", (double)c_p3[0], (double)c_p3[1]);
-
-	part1 = 1/(2*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1));
-	part2 = 2 * r_min * r_min * c_p3[1] / (c_p3[0] * c_p3[0]);
-	part3 = sqrtf( 4 * powf(r_min, 4) *  c_p3[1] * c_p3[1]  / powf(c_p3[0], 4) - 4*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1)*(powf(r_min, 4)/(c_p3[0]*c_p3[0]) - r_min * r_min)   );
-
-	yt1 =  part1 * ( part2 + part3 );
-	yt2 =  part1 * ( part2 - part3 );
-
-	printf("yt1 %0.4f, yt2 %0.4f\n", (double)yt1, (double)yt2);
-
-	xt1 = (r_min * r_min - yt1*c_p3[1])/c_p3[0];
-	xt2 = (r_min * r_min - yt2*c_p3[1])/c_p3[0];
-
-	printf("xt1 %0.4f, xt2 %0.4f\n", (double)xt1, (double)xt2);
-
-	/* transform back to p_2 system */
-	float Tp3_1[2] = {xt1 + v_p2c[0], yt1  + v_p2c[1]};
-	float Tp3_2[2] = {xt2 + v_p2c[0], yt2  + v_p2c[1]};
-
-	printf("Tp3_1 %0.4f, %0.4f\n", (double)Tp3_1[0], (double)Tp3_1[1]);
-	printf("Tp3_2 %0.4f, %0.4f\n", (double)Tp3_2[0], (double)Tp3_2[1]);
-
-	/* find correct tangent point (larger distance from OTHER waypoint */
-	float p1Tp1_1[2] = {Tp1_1[0] - p1[0], Tp1_1[1] - p1[1]};
-	d1 = sqrtf(p1Tp1_1[0] * p1Tp1_1[0] + p1Tp1_1[1] * p1Tp1_1[1]);
-	float p1Tp1_2[2] = {Tp1_2[0] - p1[0], Tp1_2[1] - p1[1]};
-	d2 = sqrtf(p1Tp1_2[0] * p1Tp1_2[0] + p1Tp1_2[1] * p1Tp1_2[1]);
-
-	float T3[2];
-	if(d2 > d1) {
-		T3[0] = Tp3_2[0];
-		T3[1] = Tp3_2[1];
-		printf("out Tangent point (2) %0.4f, %0.4f\n", (double)T3[0], (double)T3[1]);
-	} else {
-		T3[0] = Tp3_1[0];
-		T3[1] = Tp3_1[1];
-		printf("out Tangent point (1) %0.4f, %0.4f\n", (double)T3[0], (double)T3[1]);
-	}
-
-	float phi3 = atan2f(T3[1] - v_p2c[1], T3[0] - v_p2c[0]);
-	printf("phi3 %0.4f\n", (double)phi3);
-
-	/* end tangent p3 */
-
-	map_projection_reproject(c[0], c[1], &(arc->start_lat), &(arc->start_lon));
-	map_projection_reproject(T1[0], T1[1], &(arc->navpoint1_lat), &(arc->navpoint1_lon));
-	map_projection_reproject(T3[0], T3[1], &(arc->navpoint2_lat), &(arc->navpoint2_lon));
-
-	arc->arc_start_bearing = phi1;
-	arc->arc_sweep = phi3 - phi1;
-	arc->radius = r_min;
 
 
 
