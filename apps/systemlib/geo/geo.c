@@ -51,6 +51,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdbool.h>
+#include <mavlink/mavlink_log.h>
 
 
 /* values for map projection */
@@ -111,8 +112,14 @@ __EXPORT void map_projection_project(double lat, double lon, float *x, float *y)
 	/* using small angle approximation (formula in comment is without aproximation) */
 	double c =  acos(sin_phi_1 * sin_phi + cos_phi_1 * cos_phi * (1 - pow((lambda - lambda_0), 2) / 2)); //double c =  acos( sin_phi_1 * sin_phi + cos_phi_1 * cos_phi * cos(lambda - lambda_0) );
 
-	if (0 != c)
+	if (0 != c) {
 		k_bar = c / sin(c);
+	}
+
+	if(!isfinite(k_bar)) {
+		printf("map_projection_project k_bar NOT FINITE, c = %%.4f, setting k_bar = 0\n", c);
+		k_bar = 0;
+	}
 
 	/* using small angle approximation (formula in comment is without aproximation) */
 	*y = k_bar * (cos_phi * (lambda - lambda_0)) * scale;//*y = k_bar * (cos_phi * sin(lambda - lambda_0)) * scale;
@@ -260,7 +267,7 @@ __EXPORT int get_distance_to_line(struct crosstrack_error_s * crosstrack_error, 
 
 }
 
-
+//XXX: this function is now specific to fw navigation, should be moved out of geo
 __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, double lat_now, double lon_now, double lat_center, double lon_center,
 		float radius, float arc_start_bearing, float arc_sweep, bool wp_reached)
 {
@@ -279,12 +286,13 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 	crosstrack_error->past_end = false;
 	crosstrack_error->distance = 0.0f;
 	crosstrack_error->bearing = 0.0f;
+
 	static int counter = 0;
 //	if(counter % 20 == 0) {
 //		printf("radius: %0.4f, [deg]: arc_start_bearing: %0.4f, arc_sweep: %0.4f, bearing_now: %0.4f\n", (double)radius, (double)arc_start_bearing*180.0/M_PI, (double)arc_sweep*180.0/M_PI, (double)bearing_now*180.0/M_PI);
 //	}
 
-	counter++;
+
 	// Return error if arguments are bad
 	if (lat_now == 0.0d || lon_now == 0.0d || lat_center == 0.0d || lon_center == 0.0d || radius == 0.0d) return return_value;
 
@@ -309,7 +317,7 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 
 		if (bearing_sector_end >= bearing_sector_start && bearing_now >= bearing_sector_start && bearing_now <= bearing_sector_end) {
 			in_sector = true;
-		} else if (bearing_sector_end < bearing_sector_start && (bearing_now >= bearing_sector_start || bearing_now <= bearing_sector_start)) {
+		} else if (bearing_sector_end < bearing_sector_start && (bearing_now >= bearing_sector_start || bearing_now <= bearing_sector_end)) {
 			in_sector = true;
 		}
 	} else {
@@ -335,6 +343,14 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 
 	// If in the sector then calculate distance and bearing to closest point
 	if (in_sector) {
+		if(counter % 100 == 0) {
+			if(wp_reached) {
+				printf("in sector, wp reached\n");
+			} else {
+				printf("in sector, wp NOT reached\n");
+			}
+
+		}
 
 
 		crosstrack_error->past_end = false;
@@ -371,22 +387,28 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 		float dist_to_end = get_distance_to_next_waypoint(lat_now, lon_now, lat_end, lon_end);
 
 
-		if (dist_to_start < dist_to_end) {
-			printf("out of sector, near start\n");
-			crosstrack_error->distance = dist_to_start;
+//		if (dist_to_start < dist_to_end) {
+//			printf("out of sector, near start\n");
+//			crosstrack_error->distance = dist_to_start;
+//			if (wp_reached) {
+//				crosstrack_error->past_end = true;
+//			}
+//			crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_start, lon_start);
+//
+//		} else {
 			if (wp_reached) {
-				crosstrack_error->past_end = true;
-			}
-			crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_start, lon_start);
-
-		} else {
-			if (wp_reached) {
-				printf("out of sector, near end, wp reached\n");
+				printf("out of sector, wp reached\n");
 				crosstrack_error->past_end = true;
 				crosstrack_error->distance = dist_to_end;
 				crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_end, lon_end);
 			} else { //try to reach the waypoint again
-				printf("out of sector, near end, wp not yet reached new try\n");
+
+				if(counter % 100 == 0) {
+					printf("out of sector, wp not yet reached, new try\n");
+					int mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+					mavlink_log_info(mavlink_fd, "FW POS CONTROL: missed wp, new try");
+					close(mavlink_fd);
+				}
 
 				float dist_to_center = fabs(get_distance_to_next_waypoint(lat_now, lon_now, lat_center, lon_center));
 				crosstrack_error->distance = radius - dist_to_center;
@@ -396,11 +418,18 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 					crosstrack_error->distance *= -1;
 					crosstrack_error->bearing -= M_PI_F;
 				}
+
+
 			}
 
-		}
+//		}
+
+
+
 
 	}
+
+	counter++;
 
 	crosstrack_error->bearing = _wrap_pi(crosstrack_error->bearing);
 //	printf("crosstrack_error->bearing: %0.4f deg\n", (double)crosstrack_error->bearing * 180.0 / M_PI);
@@ -660,14 +689,36 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 
 		printf("[deg] phi1 %0.4f, phi2 %0.4f, phi3 %0.4f\n", (double)phi1*180.0/M_PI, (double)phi2*180.0/M_PI, (double)phi3*180.0/M_PI);
 
-		if (phi3 >= phi1 && phi2 <= phi3) { //clockwise
-			arc->arc_sweep = phi3 - phi1;
-		} else if (phi3 >= phi1 && phi2 > phi3) { //counter clockwise
-			arc->arc_sweep = -(M_TWOPI_F  - (phi3 - phi1));
-		} else if (phi3 < phi1 && phi2 <= phi1) { //clockwise
-			arc->arc_sweep = phi1 - phi3;
-		} else if (phi3 < phi1 && phi2 > phi1) { //counter clockwise
-			arc->arc_sweep = -(M_TWOPI_F  - (phi1 - phi3));
+//		if (phi3 >= phi1 && phi2 <= phi3) { //clockwise
+//			arc->arc_sweep = phi3 - phi1;
+//		} else if (phi3 >= phi1 && phi2 > phi3) { //counter clockwise
+//			arc->arc_sweep = -(M_TWOPI_F  - (phi3 - phi1));
+//		} else if (phi3 < phi1 && phi2 <= phi1) { //clockwise
+//			arc->arc_sweep = phi1 - phi3;
+//		} else if (phi3 < phi1 && phi2 > phi1) { //counter clockwise
+//			arc->arc_sweep = -(M_TWOPI_F  - (phi1 - phi3));
+//		}
+
+		/* calculate direction */
+		float diff_clockwise = _wrap_2pi(phi2 - phi1);
+		float diff_cclockwise = M_TWOPI_F - diff_clockwise;
+
+		if(diff_clockwise < diff_cclockwise) {
+			printf("clockwise arc\n");
+			if (phi3 >= phi1) {
+				arc->arc_sweep = phi3 - phi1;
+			}
+			else {
+				arc->arc_sweep = M_TWOPI_F -(phi1 - phi3);
+			}
+		} else {
+			printf("counter clockwise arc\n");
+			if (phi3 >= phi1) {
+				arc->arc_sweep = -(M_TWOPI_F - (phi3 - phi1));
+			}
+			else {
+				arc->arc_sweep = -(phi1 - phi3);
+			}
 		}
 
 

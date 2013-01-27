@@ -610,6 +610,7 @@ l_debug_key_value(struct listener *l)
 					   last_sensor_timestamp / 1000,
 					   debug.key,
 					   debug.value);
+
 }
 
 void

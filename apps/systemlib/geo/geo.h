@@ -64,6 +64,9 @@ struct planned_path_segments_s {
 	float arc_start_bearing;		// Bearing from center to start of arc
 	float arc_sweep;				// Angle (radians) swept out by arc around center.
 								// Positive for clockwise, negative for counter-clockwise
+
+	float arc_psi_rate;
+
 	double navpoint1_lat;
 	double navpoint1_lon;
 	double navpoint2_lat;
@@ -104,6 +107,7 @@ __EXPORT float get_bearing_to_next_waypoint(double lat_now, double lon_now, doub
 
 __EXPORT int get_distance_to_line(struct crosstrack_error_s * crosstrack_error, double lat_now, double lon_now, double lat_start, double lon_start, double lat_end, double lon_end);
 
+//XXX: this function is now specific to fw navigation, should be moved out of geo
 __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, double lat_now, double lon_now, double lat_center, double lon_center,
 		float radius, float arc_start_bearing, float arc_sweep, bool wp_reached);
 
