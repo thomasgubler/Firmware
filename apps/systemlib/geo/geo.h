@@ -71,6 +71,8 @@ struct planned_path_segments_s {
 	double navpoint1_lon;
 	double navpoint2_lat;
 	double navpoint2_lon;
+
+	bool valid;
 };
 
 /**

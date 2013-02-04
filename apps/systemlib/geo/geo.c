@@ -538,6 +538,7 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 	printf("p1 %0.4f, %0.4f\n", (double)p1[0], (double)p1[1]);
 	printf("p2 %0.4f, %0.4f\n", (double)p2[0], (double)p2[1]);
 	printf("p3 %0.4f, %0.4f\n", (double)p3[0], (double)p3[1]);
+	printf("r_min: %0.4f\n", (double)r_min);
 
 
 	/* find center */
@@ -566,7 +567,7 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 
 	/* check that current p1 is outside circle */
 	float v_p1c[2] = {c[0] - p1[0], c[1] - p1[1]};
-	if (r_min < sqrtf(v_p1c[0]*v_p1c[0] + v_p1c[1]*v_p1c[1])) {
+//	if (r_min < sqrtf(v_p1c[0]*v_p1c[0] + v_p1c[1]*v_p1c[1])) {
 
 		/* tangent from p1 to circle */
 		/* transform p_1 to c system */
@@ -579,7 +580,11 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 		if(discriminant >= 0) {
 			part3 = sqrtf( discriminant );
 		} else {
-			printf("FW NAVIGATION ERROR: DISCRIMINANT < 0\n");
+			printf("FW NAVIGATION ERROR: DISCRIMINANT < 0, DISABLING ARCS FOR THIS WAYPOINT\n"); //happens if the radius is to large for the distace bewteeen the waypoints
+
+			arc->navpoint1_lat = lat2;
+			arc->navpoint1_lon = lon2;
+			arc->valid = false;
 			return;
 		}
 
@@ -630,7 +635,11 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 		if(discriminant >= 0) {
 			part3 = sqrtf( discriminant );
 		} else {
-			printf("FW NAVIGATION ERROR: DISCRIMINANT < 0\n");
+			printf("FW NAVIGATION ERROR: DISCRIMINANT < 0, DISABLING ARCS FOR THIS WAYPOINT\n"); //happens if the radius is to large for the distace bewteeen the waypoints
+
+			arc->navpoint1_lat = lat2;
+			arc->navpoint1_lon = lon2;
+			arc->valid = false;
 			return;
 		}
 
@@ -728,10 +737,11 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 //			arc->arc_sweep += M_TWOPI_F;
 //		}
 		arc->radius = r_min;
-	} else {
-		//XXX: handle this...
-		printf("NAVIGATION ERROR\n");
-	}
+		arc->valid = true;
+//	} else {
+//		//XXX: handle this...
+//		printf("NAVIGATION ERROR\n");
+//	}
 
 
 
