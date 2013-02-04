@@ -73,6 +73,7 @@
 PARAM_DEFINE_FLOAT(FW_HEAD_P, 0.1f);
 PARAM_DEFINE_FLOAT(FW_HEADR_I, 0.1f);
 PARAM_DEFINE_FLOAT(FW_HEADR_LIM, 1.5f); //TODO: think about reasonable value
+PARAM_DEFINE_FLOAT(FW_HEADR_AWU, 1.0f);
 PARAM_DEFINE_FLOAT(FW_XTRACK_P, 0.01745f);
 PARAM_DEFINE_FLOAT(FW_XTRACK_D, 0.01745f);
 PARAM_DEFINE_FLOAT(FW_XTRACK_I, 0.01745f);
@@ -86,6 +87,7 @@ struct fw_pos_control_params {
 	float heading_p;
 	float headingr_p;
 	float headingr_i;
+	float headingr_awu;
 	float headingr_lim;
 	float xtrack_p;
 	float xtrack_d;
@@ -100,6 +102,7 @@ struct fw_pos_control_param_handles {
 	param_t heading_p;
 	param_t headingr_p;
 	param_t headingr_i;
+	param_t headingr_awu;
 	param_t headingr_lim;
 	param_t xtrack_p;
 	param_t xtrack_d;
@@ -145,6 +148,7 @@ static int parameters_init(struct fw_pos_control_param_handles *h)
 	h->heading_p 		=	param_find("FW_HEAD_P");
 	h->headingr_p 		=	param_find("FW_HEADR_P");
 	h->headingr_i 		=	param_find("FW_HEADR_I");
+	h->headingr_awu 		=	param_find("FW_HEADR_AWU");
 	h->headingr_lim 	=	param_find("FW_HEADR_LIM");
 	h->xtrack_p 		=	param_find("FW_XTRACK_P");
 	h->xtrack_d 		=	param_find("FW_XTRACK_D");
@@ -162,6 +166,7 @@ static int parameters_update(const struct fw_pos_control_param_handles *h, struc
 	param_get(h->heading_p, &(p->heading_p));
 	param_get(h->headingr_p, &(p->headingr_p));
 	param_get(h->headingr_i, &(p->headingr_i));
+	param_get(h->headingr_awu, &(p->headingr_awu));
 	param_get(h->headingr_lim, &(p->headingr_lim));
 	param_get(h->xtrack_p, &(p->xtrack_p));
 	param_get(h->xtrack_d, &(p->xtrack_d));
@@ -257,7 +262,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		parameters_init(&h);
 		parameters_update(&h, &p);
 		pid_init(&heading_controller, p.heading_p, 0.0f, 0.0f, 0.0f, 10000.0f, PID_MODE_DERIVATIV_NONE); //arbitrary high limit
-		pid_init(&heading_rate_controller, p.headingr_p, p.headingr_i, 0.0f, 0.0f, p.roll_lim, PID_MODE_DERIVATIV_NONE);
+		pid_init(&heading_rate_controller, p.headingr_p, p.headingr_i, 0.0f, p.headingr_awu, p.roll_lim, PID_MODE_DERIVATIV_NONE);
 		pid_init(&altitude_controller, p.altitude_p, 0.0f, 0.0f, 0.0f, p.pitch_lim, PID_MODE_DERIVATIV_NONE);
 		pid_init(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu , 30.0f*M_DEG_TO_RAD_F, PID_MODE_DERIVATIV_CALC); //TODO: remove hardcoded value
 
@@ -296,7 +301,6 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 			static int counter = 0;
 
 			static uint64_t last_run = 0;
-			const float deltaT = (hrt_absolute_time() - last_run) / 1000000.0f;
 			last_run = hrt_absolute_time();
 
 			if (ret < 0) {
@@ -315,7 +319,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 					/* update parameters from storage */
 					parameters_update(&h, &p);
 					pid_set_parameters(&heading_controller, p.heading_p, 0, 0, 0, 10000.0f); //arbitrary high limit
-					pid_set_parameters(&heading_rate_controller, p.headingr_p, p.headingr_i, 0, 0, p.roll_lim);
+					pid_set_parameters(&heading_rate_controller, p.headingr_p, p.headingr_i, 0, p.headingr_awu, p.roll_lim);
 					pid_set_parameters(&altitude_controller, p.altitude_p, 0, 0, 0, p.pitch_lim);
 					pid_set_parameters(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu, 30.0f*M_DEG_TO_RAD); //TODO: remove hardcoded value
 					r_min = r_min = 35.0f*35.0f/(9.81f*tanf(p.roll_lim)) + 50.0f; //V^2/(9.81*tan(roll_max) + margin //XXX: remove hardcoded value
@@ -353,7 +357,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 						orb_copy(ORB_ID(vehicle_global_position_setpoint), global_setpoint_sub, &global_setpoint);
 						wp_reached = true;
-						if(!global_sp_updated_set_once) {
+						if(!global_sp_updated_set_once || global_setpoint.index == current_navigation_setpoint.index) { //only update the navigation setpoint here if it's empty or if the setpoint is the same as the old one (same index) but has been moved around
 							/* init navigation */
 							/* load next wp to current_navigation_setpoint */
 							start_pos = global_pos; //for now using the current position as the startpoint (= approx. last waypoint because the setpoint switch occurs at the waypoint)
@@ -380,6 +384,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 							psi_track = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
 																						(double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
 							printf("next navigation point direction: %0.4f deg\n", (double)psi_track * 180.0 / M_PI);
+
+							horizontal_navigation_state = HNAV_LINE;
 
 
 						}

@@ -75,6 +75,8 @@ struct vehicle_global_position_setpoint_s
 	float acceptance_radius;			/**< radius of orbit around wp which the mav has to fly through */
 	int32_t lat_next;			/**< latitude of next setpoint in degrees * 1E7, only used if waypoint_navigation == WP_NAV_GUIDE	*/
 	int32_t lon_next;			/**< longitude of next setpoint in degrees * 1E7, only used if waypoint_navigation == WP_NAV_GUIDE	*/
+
+	uint16_t index;			 /**< can be used by the position controller to assess the type of setpoint change (next wp in chain or old (same) wp moved)*/
 };
 
 /**
