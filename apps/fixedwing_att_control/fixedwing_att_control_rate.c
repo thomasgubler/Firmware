@@ -72,6 +72,8 @@ PARAM_DEFINE_FLOAT(FW_ROLLR_AWU, 0.9f);
 PARAM_DEFINE_FLOAT(FW_ROLLR_LIM, 0.7f);   // Roll rate limit in radians/sec, applies to the roll controller
 PARAM_DEFINE_FLOAT(FW_ROLL_P, 4.0f);
 PARAM_DEFINE_FLOAT(FW_PITCH_RCOMP, 0.1f);
+PARAM_DEFINE_FLOAT(FW_ROLL_LIM, 0.7f);	// Roll angle limit in radians
+
 
 //Pitch control parameters
 PARAM_DEFINE_FLOAT(FW_PITCHR_P, 0.8f);
@@ -79,6 +81,7 @@ PARAM_DEFINE_FLOAT(FW_PITCHR_I, 0.2f);
 PARAM_DEFINE_FLOAT(FW_PITCHR_AWU, 0.8f);
 PARAM_DEFINE_FLOAT(FW_PITCHR_LIM, 0.35f);   // Pitch rate limit in radians/sec, applies to the pitch controller
 PARAM_DEFINE_FLOAT(FW_PITCH_P, 8.0f);
+PARAM_DEFINE_FLOAT(FW_PITCH_LIM, 0.35f);	/**< Pitch angle limit in radians per second */
 
 //Yaw control parameters					//XXX TODO this is copy paste, asign correct values
 PARAM_DEFINE_FLOAT(FW_YAWR_P, 0.3f);

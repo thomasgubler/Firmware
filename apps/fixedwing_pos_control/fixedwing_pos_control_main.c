@@ -266,7 +266,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		pid_init(&altitude_controller, p.altitude_p, 0.0f, 0.0f, 0.0f, p.pitch_lim, PID_MODE_DERIVATIV_NONE);
 		pid_init(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu , 30.0f*M_DEG_TO_RAD_F, PID_MODE_DERIVATIV_CALC); //TODO: remove hardcoded value
 
-		float r_min = fabs(30.0f*30.0f/(9.81*tanf(p.roll_lim))); //V^2/(9.81*tan(roll_max) //XXX: remove hardcoded value
+		float r_min = fabs(30.0f*30.0f/(9.81*tanf(p.roll_lim))) +10; //V^2/(9.81*tan(roll_max) //XXX: remove hardcoded value
 
 		/* Horizontal Navigation State */
 		typedef enum {
@@ -322,7 +322,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 					pid_set_parameters(&heading_rate_controller, p.headingr_p, p.headingr_i, 0, p.headingr_awu, p.roll_lim);
 					pid_set_parameters(&altitude_controller, p.altitude_p, 0, 0, 0, p.pitch_lim);
 					pid_set_parameters(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu, 30.0f*M_DEG_TO_RAD); //TODO: remove hardcoded value
-					r_min = fabs(30.0f*30.0f/(9.81*tanf(p.roll_lim))); //V^2/(9.81*tan(roll_max) + margin //XXX: remove hardcoded value
+					r_min = fabs(30.0f*30.0f/(9.81*tanf(p.roll_lim))) + 10; //V^2/(9.81*tan(roll_max) + margin //XXX: remove hardcoded value
 
 				}
 

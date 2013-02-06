@@ -69,6 +69,7 @@ struct fw_att_control_params {
 	float pitchrate_lim;
 	float yawrate_lim;
 	float pitch_roll_compensation_p;
+	float pitch_lim;
 };
 
 struct fw_pos_control_param_handles {
@@ -78,6 +79,7 @@ struct fw_pos_control_param_handles {
 	param_t pitchrate_lim;
 	param_t yawrate_lim;
 	param_t pitch_roll_compensation_p;
+	param_t pitch_lim;
 };
 
 
@@ -95,6 +97,7 @@ static int parameters_init(struct fw_pos_control_param_handles *h)
 	h->pitchrate_lim =	param_find("FW_PITCHR_LIM");
 	h->yawrate_lim =	param_find("FW_YAWR_LIM");
 	h->pitch_roll_compensation_p = param_find("FW_PITCH_RCOMP");
+	h->pitch_lim 		=	param_find("FW_PITCH_LIM");
 
 	return OK;
 }
@@ -107,6 +110,7 @@ static int parameters_update(const struct fw_pos_control_param_handles *h, struc
 	param_get(h->pitchrate_lim, &(p->pitchrate_lim));
 	param_get(h->yawrate_lim, &(p->yawrate_lim));
 	param_get(h->pitch_roll_compensation_p, &(p->pitch_roll_compensation_p));
+	param_get(h->pitch_lim, &(p->pitch_lim));
 
 	return OK;
 }
@@ -142,24 +146,49 @@ int fixedwing_att_control_attitude(const struct vehicle_attitude_setpoint_s *att
 		pid_set_parameters(&pitch_controller, p.pitch_p, 0, 0, 0, p.pitchrate_lim);
 	}
 
+
+
 	/* Roll (P) */
-	rates_sp->roll = pid_calculate(&roll_controller, att_sp->roll_body, att->roll, 0, 0);
+
+	float phi_dot = pid_calculate(&roll_controller, att_sp->roll_body, att->roll, 0, 0);
+
 
 
 	/* Pitch (P) */
 
 	/* compensate feedforward for loss of lift due to non-horizontal angle of wing */
+
+	/* set pitch plus feedforward roll compensation and check pitch lim */
 	float pitch_sp_rollcompensation = p.pitch_roll_compensation_p * fabsf(sinf(att_sp->roll_body));
-	/* set pitch plus feedforward roll compensation */
-	rates_sp->pitch = pid_calculate(&pitch_controller,
-					att_sp->pitch_body + pitch_sp_rollcompensation,
+	if(att_sp->pitch_body + pitch_sp_rollcompensation > p.pitch_lim) {
+		pitch_sp_rollcompensation = p.pitch_lim - att_sp->pitch_body;
+	} else if (att_sp->pitch_body + pitch_sp_rollcompensation < -p.pitch_lim)
+	{
+		pitch_sp_rollcompensation = -p.pitch_lim - att_sp->pitch_body;
+	}
+
+	float theta_dot = pid_calculate(&pitch_controller,
+			att_sp->pitch_body + pitch_sp_rollcompensation,
 					att->pitch, 0, 0);
 
-	/* Yaw (from coordinated turn constraint or lateral force) */
-	rates_sp->yaw = (att->rollspeed * rates_sp->roll + 9.81f * sinf(att->roll) * cosf(att->pitch) + speed_body[0] * rates_sp->pitch * sinf(att->roll))
-			/ (speed_body[0] * cosf(att->roll) * cosf(att->pitch) + speed_body[2] * sinf(att->pitch));
 
-//	printf("rates_sp->yaw %.4f \n", (double)rates_sp->yaw);
+	/* Yaw (from coordinated turn constraint or lateral force) */
+	float psi_dot = (speed_body[2] * phi_dot + 9.81f * sinf(att_sp->roll_body) * cosf(att_sp->pitch_body) + speed_body[0] * theta_dot * sinf(att_sp->roll_body))
+			/ (speed_body[0] * cosf(att_sp->roll_body) * cosf(att_sp->pitch_body) + speed_body[2] * sinf(att_sp->pitch_body));
+
+	/* limit psi_dot *///xxx: parameter?
+	if(psi_dot > 2.0f) {
+		psi_dot = 2.0f;
+	} else if (psi_dot < -2.0f) {
+		psi_dot = -2.0f;
+	}
+				printf("psi_dot %.4f \n", (double)psi_dot);
+
+
+	/* Use Jacobian to go from euler rates to body rates */
+	rates_sp->roll = phi_dot - sinf(att->pitch) * psi_dot;
+	rates_sp->pitch = cosf(att->roll) * theta_dot + cosf(att->pitch) * sinf(att->roll) * psi_dot;
+	rates_sp->yaw = -sinf(att->roll) * theta_dot + cosf(att->pitch) * cosf(att->roll) * psi_dot;
 
 	counter++;
 
