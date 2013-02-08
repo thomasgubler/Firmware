@@ -128,6 +128,9 @@ __EXPORT float get_circle_bearing(float phi);
 
 /**
  * Calculates arc segment based on 3 points
+ * p1: old wp, p2: current wp, p3: next wp
+ *
+ * Output: Arc that goes through p2, navpoint1 and navpoint2 are the tangent points on the arc to p1 and p2
  *
  */
 __EXPORT void calculate_arc(struct planned_path_segments_s * arc,

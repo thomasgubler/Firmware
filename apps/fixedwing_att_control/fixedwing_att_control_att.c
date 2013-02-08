@@ -182,7 +182,7 @@ int fixedwing_att_control_attitude(const struct vehicle_attitude_setpoint_s *att
 	} else if (psi_dot < -2.0f) {
 		psi_dot = -2.0f;
 	}
-				printf("psi_dot %.4f \n", (double)psi_dot);
+	//printf("psi_dot %.4f \n", (double)psi_dot);
 
 
 	/* Use Jacobian to go from euler rates to body rates */

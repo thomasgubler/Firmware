@@ -61,6 +61,9 @@ static double cos_phi_1;
 static double lambda_0;
 static double scale;
 
+/* Internal prototypes */
+int find_tangent_point(float * T1, float * phi1 , float p1[], float p2[], float v_p2c[], float r_min);
+
 __EXPORT void map_projection_init(double lat_0, double lon_0) //lat_0, lon_0 are expected to be in correct format: -> 47.1234567 and not 471234567
 {
 	/* notation and formulas according to: http://mathworld.wolfram.com/AzimuthalEquidistantProjection.html */
@@ -569,120 +572,27 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 	float v_p1c[2] = {c[0] - p1[0], c[1] - p1[1]};
 //	if (r_min < sqrtf(v_p1c[0]*v_p1c[0] + v_p1c[1]*v_p1c[1])) {
 
-		/* tangent from p1 to circle */
-		/* transform p_1 to c system */
-		float c_p1[2] = {p1[0] - v_p2c[0], p1[1] - v_p2c[1]};
+	float T1[2];
+	float phi1;
+	int tangent_result = find_tangent_point(&T1, &phi1 , p1, p2, v_p2c, r_min);
 
-		float part1 = 1/(2*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1));
-		float part2 = 2 * r_min * r_min * c_p1[1] / (c_p1[0] * c_p1[0]);
-		float discriminant = 4 * powf(r_min, 4) *  c_p1[1] * c_p1[1]  / powf(c_p1[0], 4) - 4*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1)*(powf(r_min, 4)/(c_p1[0]*c_p1[0]) - r_min * r_min);
-		float part3;
-		if(discriminant >= 0) {
-			part3 = sqrtf( discriminant );
-		} else {
-			printf("FW NAVIGATION ERROR: DISCRIMINANT < 0, DISABLING ARCS FOR THIS WAYPOINT\n"); //happens if the radius is to large for the distace bewteeen the waypoints
+	if(tangent_result != OK) {
+		arc->navpoint1_lat = lat2;
+		arc->navpoint1_lon = lon2;
+		arc->valid = false;
+		return;
+	}
 
-			arc->navpoint1_lat = lat2;
-			arc->navpoint1_lon = lon2;
-			arc->valid = false;
-			return;
-		}
+	float T3[2];
+	float phi3;
+	tangent_result = find_tangent_point(&T3, &phi3 , p3, p2, v_p2c, r_min);
+	if(tangent_result != OK) {
+		arc->navpoint1_lat = lat2;
+		arc->navpoint1_lon = lon2;
+		arc->valid = false;
+		return;
+	}
 
-		float yt1 =  part1 * ( part2 + part3 );
-		float yt2 =  part1 * ( part2 - part3 );
-
-		float xt1 = (r_min * r_min - yt1*c_p1[1])/c_p1[0];
-		float xt2 = (r_min * r_min - yt2*c_p1[1])/c_p1[0];
-
-		/* transform back to p_2 system */
-		float Tp1_1[2] = {xt1 + v_p2c[0], yt1  + v_p2c[1]};
-		float Tp1_2[2] = {xt2 + v_p2c[0], yt2  + v_p2c[1]};
-
-		/* find correct tangent point (smaller distance from p2) */
-		float p2Tp1_1[2] = {Tp1_1[0] - p2[0], Tp1_1[1] - p2[1]};
-		float d1 = sqrtf(p2Tp1_1[0] * p2Tp1_1[0] + p2Tp1_1[1] * p2Tp1_1[1]);
-		float p2Tp1_2[2] = {Tp1_2[0] - p2[0], Tp1_2[1] - p2[1]};
-		float d2 = sqrtf(p2Tp1_2[0] * p2Tp1_2[0] + p2Tp1_2[1] * p2Tp1_2[1]);
-
-		printf("d1 %0.4f, d2 %0.4f\n", d1, d2);
-
-		float T1[2];
-		if(d2 < d1) {
-			T1[0] = Tp1_2[0];
-			T1[1] = Tp1_2[1];
-			printf("in Tangent point (2) %0.4f, %0.4f\n", (double)T1[0], (double)T1[1]);
-		} else {
-			T1[0] = Tp1_1[0];
-			T1[1] = Tp1_1[1];
-			printf("in Tangent point (1) %0.4f, %0.4f\n", (double)T1[0], (double)T1[1]);
-		}
-
-		float phi1 = atan2f(T1[1] - v_p2c[1], T1[0] - v_p2c[0]);
-		printf("phi1 %0.4f\n", (double)phi1);
-
-		/* end tangent p1 */
-
-		/* tangent from p3 to circle */ //XXX: a tired (and lazy) developer just copied the code block from above. Create function or use mathlib anyway... (work in progess)
-		/* transform p_3 to c system */
-		float c_p3[2] = {p3[0] - v_p2c[0], p3[1] - v_p2c[1]};
-
-		printf("c_p3 %0.4f, %0.4f\n", (double)c_p3[0], (double)c_p3[1]);
-
-		part1 = 1/(2*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1));
-		part2 = 2 * r_min * r_min * c_p3[1] / (c_p3[0] * c_p3[0]);
-		discriminant = 4 * powf(r_min, 4) *  c_p3[1] * c_p3[1]  / powf(c_p3[0], 4) - 4*((c_p3[1]*c_p3[1])/(c_p3[0]*c_p3[0]) + 1)*(powf(r_min, 4)/(c_p3[0]*c_p3[0]) - r_min * r_min);
-
-		if(discriminant >= 0) {
-			part3 = sqrtf( discriminant );
-		} else {
-			printf("FW NAVIGATION ERROR: DISCRIMINANT < 0, DISABLING ARCS FOR THIS WAYPOINT\n"); //happens if the radius is to large for the distace bewteeen the waypoints
-
-			arc->navpoint1_lat = lat2;
-			arc->navpoint1_lon = lon2;
-			arc->valid = false;
-			return;
-		}
-
-		yt1 =  part1 * ( part2 + part3 );
-		yt2 =  part1 * ( part2 - part3 );
-
-		printf("yt1 %0.4f, yt2 %0.4f\n", (double)yt1, (double)yt2);
-
-		xt1 = (r_min * r_min - yt1*c_p3[1])/c_p3[0];
-		xt2 = (r_min * r_min - yt2*c_p3[1])/c_p3[0];
-
-		printf("xt1 %0.4f, xt2 %0.4f\n", (double)xt1, (double)xt2);
-
-		/* transform back to p_2 system */
-		float Tp3_1[2] = {xt1 + v_p2c[0], yt1  + v_p2c[1]};
-		float Tp3_2[2] = {xt2 + v_p2c[0], yt2  + v_p2c[1]};
-
-		printf("Tp3_1 %0.4f, %0.4f\n", (double)Tp3_1[0], (double)Tp3_1[1]);
-		printf("Tp3_2 %0.4f, %0.4f\n", (double)Tp3_2[0], (double)Tp3_2[1]);
-
-		/* find correct tangent point (smaller distance from p2 */
-		float p2Tp3_1[2] = {Tp3_1[0] - p2[0], Tp3_1[1] - p2[1]};
-		d1 = sqrtf(p2Tp3_1[0] * p2Tp3_1[0] + p2Tp3_1[1] * p2Tp3_1[1]);
-		float p2Tp3_2[2] = {Tp3_2[0] - p2[0], Tp3_2[1] - p2[1]};
-		d2 = sqrtf(p2Tp3_2[0] * p2Tp3_2[0] + p2Tp3_2[1] * p2Tp3_2[1]);
-
-		printf("d1 %0.4f, d2 %0.4f\n", d1, d2);
-
-		float T3[2];
-		if(d2 < d1) {
-			T3[0] = Tp3_2[0];
-			T3[1] = Tp3_2[1];
-			printf("out Tangent point (2) %0.4f, %0.4f\n", (double)T3[0], (double)T3[1]);
-		} else {
-			T3[0] = Tp3_1[0];
-			T3[1] = Tp3_1[1];
-			printf("out Tangent point (1) %0.4f, %0.4f\n", (double)T3[0], (double)T3[1]);
-		}
-
-		float phi3 = atan2f(T3[1] - v_p2c[1], T3[0] - v_p2c[0]);
-		printf("phi3 %0.4f\n", (double)phi3);
-
-		/* end tangent p3 */
 
 		map_projection_reproject(c[0], c[1], &(arc->start_lat), &(arc->start_lon));
 		map_projection_reproject(T1[0], T1[1], &(arc->navpoint1_lat), &(arc->navpoint1_lon));
@@ -698,15 +608,6 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 
 		printf("[deg] phi1 %0.4f, phi2 %0.4f, phi3 %0.4f\n", (double)phi1*180.0/M_PI, (double)phi2*180.0/M_PI, (double)phi3*180.0/M_PI);
 
-//		if (phi3 >= phi1 && phi2 <= phi3) { //clockwise
-//			arc->arc_sweep = phi3 - phi1;
-//		} else if (phi3 >= phi1 && phi2 > phi3) { //counter clockwise
-//			arc->arc_sweep = -(M_TWOPI_F  - (phi3 - phi1));
-//		} else if (phi3 < phi1 && phi2 <= phi1) { //clockwise
-//			arc->arc_sweep = phi1 - phi3;
-//		} else if (phi3 < phi1 && phi2 > phi1) { //counter clockwise
-//			arc->arc_sweep = -(M_TWOPI_F  - (phi1 - phi3));
-//		}
 
 		/* calculate direction */
 		float diff_clockwise = _wrap_2pi(phi2 - phi1);
@@ -730,12 +631,6 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 			}
 		}
 
-
-
-
-//		if(arc->arc_sweep < 0) {
-//			arc->arc_sweep += M_TWOPI_F;
-//		}
 		arc->radius = r_min;
 		arc->valid = true;
 //	} else {
@@ -743,9 +638,63 @@ __EXPORT void calculate_arc(struct planned_path_segments_s * arc,
 //		printf("NAVIGATION ERROR\n");
 //	}
 
-
-
-
 }
+
+/**
+ * @brief Calculate tangent point from  p1 to a circle with center p2 + v_p2c and radius r_min
+ * The function is designed to be used in the calculate_arc function
+ *
+ */
+int find_tangent_point(float * T, float * phi , float p1[], float p2[], float v_p2c[], float r_min)
+{
+	/* transform p_1 to c system */
+	float c_p1[2] = {p1[0] - v_p2c[0], p1[1] - v_p2c[1]};
+
+	float parT = 1/(2*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1));
+	float part2 = 2 * r_min * r_min * c_p1[1] / (c_p1[0] * c_p1[0]);
+	float discriminant = 4 * powf(r_min, 4) *  c_p1[1] * c_p1[1]  / powf(c_p1[0], 4) - 4*((c_p1[1]*c_p1[1])/(c_p1[0]*c_p1[0]) + 1)*(powf(r_min, 4)/(c_p1[0]*c_p1[0]) - r_min * r_min);
+	float part3;
+	if(discriminant >= 0) {
+		part3 = sqrtf( discriminant );
+	} else {
+		printf("FW NAVIGATION ERROR: DISCRIMINANT < 0, DISABLING ARCS FOR THIS WAYPOINT\n"); //happens if the radius is to large for the distace bewteeen the waypoints, XXX: need clever solution to this
+
+		return ERROR;
+	}
+
+	float yT =  parT * ( part2 + part3 );
+	float yt2 =  parT * ( part2 - part3 );
+
+	float xT = (r_min * r_min - yT*c_p1[1])/c_p1[0];
+	float xt2 = (r_min * r_min - yt2*c_p1[1])/c_p1[0];
+
+	/* transform back to p_2 system */
+	float Tp1_1[2] = {xT + v_p2c[0], yT  + v_p2c[1]};
+	float Tp1_2[2] = {xt2 + v_p2c[0], yt2  + v_p2c[1]};
+
+	/* find correct tangent point (smaller distance from p2 XXX: true?) */
+	float p2Tp1_1[2] = {Tp1_1[0] - p2[0], Tp1_1[1] - p2[1]};
+	float d1 = sqrtf(p2Tp1_1[0] * p2Tp1_1[0] + p2Tp1_1[1] * p2Tp1_1[1]);
+	float p2Tp1_2[2] = {Tp1_2[0] - p2[0], Tp1_2[1] - p2[1]};
+	float d2 = sqrtf(p2Tp1_2[0] * p2Tp1_2[0] + p2Tp1_2[1] * p2Tp1_2[1]);
+
+	printf("d1 %0.4f, d2 %0.4f\n", (double)d1, (double)d2);
+
+	if(d2 < d1) {
+		T[0] = Tp1_2[0];
+		T[1] = Tp1_2[1];
+		printf("in Tangent point (2) %0.4f, %0.4f\n", (double)T[0], (double)T[1]);
+	} else {
+		T[0] = Tp1_1[0];
+		T[1] = Tp1_1[1];
+		printf("in Tangent point (1) %0.4f, %0.4f\n", (double)T[0], (double)T[1]);
+	}
+
+	*phi = atan2f(T[1] - v_p2c[1], T[0] - v_p2c[0]);
+	printf("phi %0.4f\n", (double)(*phi));
+
+	return OK;
+}
+
 
 

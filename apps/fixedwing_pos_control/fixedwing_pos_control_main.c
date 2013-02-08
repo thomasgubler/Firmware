@@ -404,7 +404,6 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		//					printf("lat_sp %d, ln_sp %d, lat: %d, lon: %d\n", global_setpoint.lat, global_setpoint.lon, global_pos.lat, global_pos.lon);
 
 						/* calculate crosstrack error */
-						// Only the case of a straight line track following handled so far
 
 						int distance_res;
 						/* if current waypoint is a guide wp --> check if we need to switch to the horizontal navigation state (eg. change from line to arc and vice versa */
@@ -522,18 +521,13 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 						dbg_xte.value = xtrack_err.distance;
 						orb_publish(ORB_ID(debug_key_value), pub_dbg_xte, &dbg_xte);
 
-						if(distance_res == OK /*&& !xtrack_err.past_end*/) {
+						if(distance_res == OK) {
 //							if (counter % 10 == 0) {
 //								printf("distance = %0.4f\n",  xtrack_err.distance);
 //							}
 
 							float delta_psi_c = pid_calculate(&offtrack_controller, 0, xtrack_err.distance, 0.0f, deltaT); //p.xtrack_p * xtrack_err.distanc
 							//note: delta_psi_c is limited by the limit of the offtrack_controller
-
-//							printf("xtrack_err.distance %.4f , delta_psi_c %.4f, radius : %.4f\n", (double)xtrack_err.distance, (double)delta_psi_c, (double)arc.radius);
-
-//							dbg_delta_psi_c.value = delta_psi_c;
-//							orb_publish(ORB_ID(debug_key_value), pub_dbg_delta_psi_c, &dbg_delta_psi_c);
 
 							float psi_c;
 							if (horizontal_navigation_state == HNAV_ARC) {
@@ -601,6 +595,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 							if (verbose && counter % 100 == 0)
 								printf("distance_res: %d, past_end %d\n", distance_res, xtrack_err.past_end);
 						}
+
+						/* END HORIZONTAL CONTROL */
 
 						/* Very simple Altitude Control */
 						if(pos_updated)
