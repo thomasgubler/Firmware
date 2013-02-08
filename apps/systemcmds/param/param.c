@@ -56,36 +56,73 @@
 
 __EXPORT int param_main(int argc, char *argv[]);
 
-static void	do_save(void);
-static void	do_load(void);
-static void	do_import(void);
-static void	do_show(void);
+static void	do_save(const char* param_file_name);
+static void	do_load(const char* param_file_name);
+static void	do_import(const char* param_file_name);
+static void	do_show(const char* search_string);
 static void	do_show_print(void *arg, param_t param);
-
-static const char *param_file_name = "/eeprom/parameters";
+static void	do_set(const char* name, const char* val);
 
 int
 param_main(int argc, char *argv[])
 {
 	if (argc >= 2) {
-		if (!strcmp(argv[1], "save"))
-			do_save();
+		if (!strcmp(argv[1], "save")) {
+			if (argc >= 3) {
+				do_save(argv[2]);
+			} else {
+				do_save(param_get_default_file());
+			}
+		}
 
-		if (!strcmp(argv[1], "load"))
-			do_load();
+		if (!strcmp(argv[1], "load")) {
+			if (argc >= 3) {
+				do_load(argv[2]);
+			} else {
+				do_load(param_get_default_file());
+			}
+		}
 
-		if (!strcmp(argv[1], "import"))
-			do_import();
+		if (!strcmp(argv[1], "import")) {
+			if (argc >= 3) {
+				do_import(argv[2]);
+			} else {
+				do_import(param_get_default_file());
+			}
+		}
 
-		if (!strcmp(argv[1], "show"))
-			do_show();
+		if (!strcmp(argv[1], "select")) {
+			if (argc >= 3) {
+				param_set_default_file(argv[2]);
+			} else {
+				param_set_default_file(NULL);
+			}
+			warnx("selected parameter default file %s", param_get_default_file());
+			exit(0);
+		}
+
+		if (!strcmp(argv[1], "show")) {
+			if (argc >= 3) {
+				do_show(argv[2]);
+			} else {
+				do_show(NULL);
+			}
+		}
+
+		if (!strcmp(argv[1], "set")) {
+			if (argc >= 4) {
+				do_set(argv[2], argv[3]);
+			} else {
+				errx(1, "not enough arguments.\nTry 'param set PARAM_NAME 3'");
+			}
+		}
 	}
-
-	errx(1, "expected a command, try 'load', 'import', 'show' or 'save'\n");
+	
+	errx(1, "expected a command, try 'load', 'import', 'show', 'set', 'select' or 'save'");
 }
 
 static void
-do_save(void)
+do_save(const char* param_file_name)
 {
 	/* delete the parameter file in case it exists */
 	unlink(param_file_name);
@@ -108,7 +145,7 @@ do_save(void)
 }
 
 static void
-do_load(void)
+do_load(const char* param_file_name)
 {
 	int fd = open(param_file_name, O_RDONLY);
 
@@ -118,14 +155,15 @@ do_load(void)
 	int result = param_load(fd);
 	close(fd);
 
-	if (result < 0)
+	if (result < 0) {
 		errx(1, "error importing from '%s'", param_file_name);
+	}
 
 	exit(0);
 }
 
 static void
-do_import(void)
+do_import(const char* param_file_name)
 {
 	int fd = open(param_file_name, O_RDONLY);
 
@@ -142,10 +180,10 @@ do_import(void)
 }
 
 static void
-do_show(void)
+do_show(const char* search_string)
 {
 	printf(" + = saved, * = unsaved\n");
-	param_foreach(do_show_print, NULL, false);
+	param_foreach(do_show_print, search_string, false);
 
 	exit(0);
 }
@@ -155,6 +193,13 @@ do_show_print(void *arg, param_t param)
 {
 	int32_t i;
 	float f;
+	const char *search_string = (const char*)arg;
+
+	/* print nothing if search string is invalid and not matching */
+	if (!(arg == NULL || (!strcmp(search_string, param_name(param))))) {
+		/* param not found */
+		return;
+	}
 
 	printf("%c %s: ",
 	       param_value_unsaved(param) ? '*' : (param_value_is_default(param) ? ' ' : '+'),
@@ -191,4 +236,62 @@ do_show_print(void *arg, param_t param)
 	}
 
 	printf("<error fetching parameter %d>\n", param);
+}
+
+static void
+do_set(const char* name, const char* val)
+{
+	int32_t i;
+	float f;
+	param_t param = param_find(name);
+
+	/* set nothing if parameter cannot be found */
+	if (param == PARAM_INVALID) {
+		/* param not found */
+		errx(1, "Error: Parameter %s not found.", name);
+	}
+
+	printf("%c %s: ",
+	       param_value_unsaved(param) ? '*' : (param_value_is_default(param) ? ' ' : '+'),
+	       param_name(param));
+
+	/*
+	 * Set parameter if type is known and conversion from string to value turns out fine
+	 */
+
+	switch (param_type(param)) {
+	case PARAM_TYPE_INT32:
+		if (!param_get(param, &i)) {
+			printf("old: %d", i);
+
+			/* convert string */
+			char* end;
+			i = strtol(val,&end,10);
+			param_set(param, &i);
+			printf(" -> new: %d\n", i);
+
+		}
+
+		break;
+
+	case PARAM_TYPE_FLOAT:
+		if (!param_get(param, &f)) {
+			printf("float values are not yet supported.");
+			// printf("old: %4.4f", (double)f);
+
+			// /* convert string */
+			// char* end;
+			// f = strtof(val,&end);
+			// param_set(param, &f);
+			// printf(" -> new: %4.4f\n", f);
+
+		}
+
+		break;
+
+	default:
+		errx(1, "<unknown / unsupported type %d>\n", 0 + param_type(param));
+	}
+
+	exit(0);
 }

@@ -45,31 +45,10 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <arch/board/drv_eeprom.h>
 #include <float.h>
 #include <string.h>
 
 #include "systemlib.h"
-
-/****************************************************************************
- * Definitions
- ****************************************************************************/
-
-const struct __multiport_info multiport_info = {
-	.port_names = {"MULT_0_US2_RXTX", "MULT_1_US2_FLOW", "MULT_2_GPIO_12"}
-};
-
-#define EEPROM_OFFSET 64
-
-#define EEPROM_PARAM_MAGIC_BYTE 0xAF
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
 
 static void kill_task(FAR _TCB *tcb, FAR void *arg);
 

@@ -43,11 +43,10 @@ CSRCS		 = err.c \
 		   conversions.c \
 		   cpuload.c \
 		   getopt_long.c \
-		   up_cxxinitialize.c
+		   up_cxxinitialize.c \
+		   airspeed.c
 
 #		   ppm_decode.c \
-
-
 
 #
 # XXX this really should be a CONFIG_* test

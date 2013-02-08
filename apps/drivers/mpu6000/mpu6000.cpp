@@ -260,6 +260,13 @@ private:
 	 */
 	uint16_t		swap16(uint16_t val) { return (val >> 8) | (val << 8);	}
 
+	/**
+	 * Self test
+	 *
+	 * @return 0 on success, 1 on failure
+	 */
+	 int 			self_test();
+
 };
 
 /**
@@ -439,8 +446,12 @@ MPU6000::init()
 	// write_reg(MPUREG_PWR_MGMT_1,MPU_CLK_SEL_PLLGYROZ);
 	usleep(1000);
 
-	/* do CDev init for the gyro device node */
-	ret = _gyro->init();
+	/* do CDev init for the gyro device node, keep it optional */
+	int gyro_ret = _gyro->init();
+
+	if (gyro_ret != OK) {
+		_gyro_topic = -1;
+	}
 
 	return ret;
 }
@@ -492,6 +503,17 @@ MPU6000::read(struct file *filp, char *buffer, size_t buflen)
 	ret = sizeof(_accel_report);
 
 	return ret;
+}
+
+int
+MPU6000::self_test()
+{
+	if (_reads == 0) {
+		measure();
+	}
+
+	/* return 0 on success, 1 else */
+	return (_reads > 0) ? 0 : 1;
 }
 
 ssize_t
@@ -592,9 +614,17 @@ MPU6000::ioctl(struct file *filp, int cmd, unsigned long arg)
 		return -EINVAL;
 
 	case ACCELIOCSSCALE:
-		/* copy scale in */
-		memcpy(&_accel_scale, (struct accel_scale *) arg, sizeof(_accel_scale));
-		return OK;
+		{
+			/* copy scale, but only if off by a few percent */
+			struct accel_scale *s = (struct accel_scale *) arg;
+			float sum = s->x_scale + s->y_scale + s->z_scale;
+			if (sum > 2.0f && sum < 4.0f) {
+				memcpy(&_accel_scale, s, sizeof(_accel_scale));
+				return OK;
+			} else {
+				return -EINVAL;
+			}
+		}
 
 	case ACCELIOCGSCALE:
 		/* copy scale out */
@@ -608,6 +638,9 @@ MPU6000::ioctl(struct file *filp, int cmd, unsigned long arg)
 		// _accel_range_scale = (9.81f / 4096.0f);
 		// _accel_range_rad_s = 8.0f * 9.81f;
 		return -EINVAL;
+
+	case ACCELIOCSELFTEST:
+		return self_test();
 
 	default:
 		/* give it to the superclass */
@@ -655,6 +688,9 @@ MPU6000::gyro_ioctl(struct file *filp, int cmd, unsigned long arg)
 		// _gyro_range_scale = xx
 		// _gyro_range_m_s2 = xx
 		return -EINVAL;
+
+	case GYROIOCSELFTEST:
+		return self_test();
 
 	default:
 		/* give it to the superclass */
@@ -813,7 +849,11 @@ MPU6000::measure()
 	 * Fetch the full set of measurements from the MPU6000 in one pass.
 	 */
 	mpu_report.cmd = DIR_READ | MPUREG_INT_STATUS;
-	transfer((uint8_t *)&mpu_report, ((uint8_t *)&mpu_report), sizeof(mpu_report));
+	if (OK != transfer((uint8_t *)&mpu_report, ((uint8_t *)&mpu_report), sizeof(mpu_report)))
+		return;
+
+	/* count measurement */
+	_reads++;
 
 	/*
 	 * Convert from big to little endian
@@ -902,7 +942,9 @@ MPU6000::measure()
 
 	/* and publish for subscribers */
 	orb_publish(ORB_ID(sensor_accel), _accel_topic, &_accel_report);
-	orb_publish(ORB_ID(sensor_gyro), _gyro_topic, &_gyro_report);
+	if (_gyro_topic != -1) {
+		orb_publish(ORB_ID(sensor_gyro), _gyro_topic, &_gyro_report);
+	}
 
 	/* stop measuring */
 	perf_end(_sample_perf);

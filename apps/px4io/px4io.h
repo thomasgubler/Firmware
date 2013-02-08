@@ -31,11 +31,19 @@
  *
  ****************************************************************************/
 
- /**
-  * @file General defines and structures for the PX4IO module firmware.
-  */
+/**
+ * @file px4io.h
+ *
+ * General defines and structures for the PX4IO module firmware.
+ */
 
-#include <arch/board/drv_gpio.h>
+#include <nuttx/config.h>
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include <drivers/boards/px4io/px4io_internal.h>
+
 #include "protocol.h"
 
 /*
@@ -45,48 +53,127 @@
 #define IO_SERVO_COUNT		8
 
 /*
+ * Debug logging
+ */
+
+#ifdef DEBUG
+# include <debug.h>
+# define debug(fmt, args...)	lib_lowprintf(fmt "\n", ##args)
+#else
+# define debug(fmt, args...)	do {} while(0)
+#endif
+
+/*
  * System state structure.
  */
-struct sys_state_s 
-{
+struct sys_state_s {
 
-	bool		armed;		/* actually armed */
-	bool		arm_ok;		/* FMU says OK to arm */
+	bool		armed;			/* IO armed */
+	bool		arm_ok;			/* FMU says OK to arm */
+	uint16_t	servo_rate;		/* output rate of servos in Hz */
 
-	/*
+	/**
+	 * Remote control input(s) channel mappings
+	 */
+	uint8_t		rc_map[4];
+
+	/**
+	 * Remote control channel attributes
+	 */
+	uint16_t	rc_min[4];
+	uint16_t	rc_trim[4];
+	uint16_t	rc_max[4];
+	int16_t		rc_rev[4];
+	uint16_t	rc_dz[4];
+
+	/**
 	 * Data from the remote control input(s)
 	 */
-	int		rc_channels;
+	unsigned	rc_channels;
 	uint16_t	rc_channel_data[PX4IO_INPUT_CHANNELS];
+	uint64_t	rc_channels_timestamp;
 
-	/*
+	/**
 	 * Control signals from FMU.
 	 */
-	uint16_t	fmu_channel_data[PX4IO_OUTPUT_CHANNELS];
+	uint16_t	fmu_channel_data[PX4IO_CONTROL_CHANNELS];
 
-	/*
+	/**
+	 * Mixed servo outputs
+	 */
+	uint16_t	servos[IO_SERVO_COUNT];
+
+	/**
 	 * Relay controls
 	 */
 	bool		relays[PX4IO_RELAY_CHANNELS];
 
-	/*
-	 * If true, we are using the FMU controls.
+	/**
+	 * If true, we are using the FMU controls, else RC input if available.
 	 */
-	bool		mixer_use_fmu;
+	bool		mixer_manual_override;
 
-	/*
+	/**
+	 * If true, FMU input is available.
+	 */
+	bool		mixer_fmu_available;
+
+	/**
 	 * If true, state that should be reported to FMU has been updated.
 	 */
 	bool		fmu_report_due;
 
-	/*
-	 * If true, new control data from the FMU has been received.
+	/**
+	 * Last FMU receive time, in microseconds since system boot
 	 */
-	bool		fmu_data_received;
+	uint64_t	fmu_data_received_time;
+
+	/**
+	 * Current serial interface mode, per the serial_rx_mode parameter
+	 * in the config packet.
+	 */
+	uint8_t		serial_rx_mode;
+
+	/**
+	 * If true, the RC signal has been lost for more than a timeout interval
+	 */
+	bool		rc_lost;
+
+	/**
+	 * If true, the connection to FMU has been lost for more than a timeout interval
+	 */
+	bool		fmu_lost;
+
+	/**
+	 * If true, FMU is ready for autonomous position control. Only used for LED indication
+	 */
+	bool vector_flight_mode_ok;
+
+	/**
+	 * If true, IO performs an on-board manual override with the RC channel values
+	 */
+	bool manual_override_ok;
+
+	/*
+	 * Measured battery voltage in mV
+	 */
+	uint16_t	battery_mv;
+
+	/*
+	 * ADC IN5 measurement
+	 */
+	uint16_t	adc_in5;
+
+	/*
+	 * Power supply overcurrent status bits.
+	 */
+	uint8_t		overcurrent;
+
 };
 
 extern struct sys_state_s system_state;
 
+#if 0
 /*
  * Software countdown timers.
  *
@@ -98,30 +185,33 @@ extern struct sys_state_s system_state;
 #define TIMER_SANITY		7
 #define TIMER_NUM_TIMERS	8
 extern volatile int	timers[TIMER_NUM_TIMERS];
+#endif
 
 /*
  * GPIO handling.
  */
-extern int gpio_fd;
+#define LED_BLUE(_s)		stm32_gpiowrite(GPIO_LED1, !(_s))
+#define LED_AMBER(_s)		stm32_gpiowrite(GPIO_LED2, !(_s))
+#define LED_SAFETY(_s)		stm32_gpiowrite(GPIO_LED3, !(_s))
 
-#define POWER_SERVO(_s)		ioctl(gpio_fd, GPIO_SET(GPIO_SERVO_POWER), (_s))
-#define POWER_ACC1(_s)		ioctl(gpio_fd, GPIO_SET(GPIO_SERVO_ACC1), (_s))
-#define POWER_ACC2(_s)		ioctl(gpio_fd, GPIO_SET(GPIO_SERVO_ACC2), (_s))
-#define POWER_RELAY1(_s)	ioctl(gpio_fd, GPIO_SET(GPIO_RELAY1, (_s))
-#define POWER_RELAY2(_s)	ioctl(gpio_fd, GPIO_SET(GPIO_RELAY2, (_s))
+#define POWER_SERVO(_s)		stm32_gpiowrite(GPIO_SERVO_PWR_EN, (_s))
+#define POWER_ACC1(_s)		stm32_gpiowrite(GPIO_ACC1_PWR_EN, (_s))
+#define POWER_ACC2(_s)		stm32_gpiowrite(GPIO_ACC2_PWR_EN, (_s))
+#define POWER_RELAY1(_s)	stm32_gpiowrite(GPIO_RELAY1_EN, (_s))
+#define POWER_RELAY2(_s)	stm32_gpiowrite(GPIO_RELAY2_EN, (_s))
 
-#define LED_AMBER(_s)		ioctl(gpio_fd, GPIO_SET(GPIO_LED_AMBER), !(_s))
-#define LED_BLUE(_s)		ioctl(gpio_fd, GPIO_SET(GPIO_LED_BLUE), !(_s))
-#define LED_SAFETY(_s)		ioctl(gpio_fd, GPIO_SET(GPIO_LED_SAFETY), !(_s))
+#define OVERCURRENT_ACC		(!stm32_gpioread(GPIO_ACC_OC_DETECT))
+#define OVERCURRENT_SERVO	(!stm32_gpioread(GPIO_SERVO_OC_DETECT))
+#define BUTTON_SAFETY		stm32_gpioread(GPIO_BTN_SAFETY)
 
-#define OVERCURRENT_ACC		ioctl(gpio_fd, GPIO_GET(GPIO_ACC_OVERCURRENT), 0)
-#define OVERCURRENT_SERVO	ioctl(gpio_fd, GPIO_GET(GPIO_SERVO_OVERCURRENT), 0)
-#define BUTTON_SAFETY		ioctl(gpio_fd, GPIO_GET(GPIO_SAFETY_BUTTON), 0)
+#define ADC_VBATT		4
+#define ADC_IN5			5
 
 /*
  * Mixer
  */
-extern int	mixer_init(const char *mq_name);
+extern void	mixer_tick(void);
+extern void	mixer_handle_text(const void *buffer, size_t length);
 
 /*
  * Safety switch/LED.
@@ -131,8 +221,22 @@ extern void	safety_init(void);
 /*
  * FMU communications
  */
-extern void	comms_init(void);
-extern void	comms_check(void);
+extern void	comms_main(void) __attribute__((noreturn));
+
+/*
+ * Sensors/misc inputs
+ */
+extern int	adc_init(void);
+extern uint16_t	adc_measure(unsigned channel);
+
+/*
+ * R/C receiver handling.
+ */
+extern void	controls_main(void);
+extern int	dsm_init(const char *device);
+extern bool	dsm_input(void);
+extern int	sbus_init(const char *device);
+extern bool	sbus_input(void);
 
 /*
  * Assertion codes

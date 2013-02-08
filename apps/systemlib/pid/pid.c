@@ -155,8 +155,8 @@ __EXPORT float pid_calculate(PID_t *pid, float sp, float val, float val_dot, flo
 	// Calculate the error integral and check for saturation
 	i = pid->integral + (error * dt);
 
-	if (fabs((error * pid->kp) + (i * pid->ki) + (d * pid->kd)) > pid->limit ||
-	    fabs(i) > pid->intmax) {
+	if (fabsf((error * pid->kp) + (i * pid->ki) + (d * pid->kd)) > pid->limit ||
+	    fabsf(i) > pid->intmax) {
 		i = pid->integral;		// If saturated then do not update integral value
 		pid->saturated = 1;
 
@@ -182,4 +182,10 @@ __EXPORT float pid_calculate(PID_t *pid, float sp, float val, float val_dot, flo
 
 
 	return pid->last_output;
+}
+
+
+__EXPORT void pid_reset_integral(PID_t *pid)
+{
+	pid->integral = 0;
 }

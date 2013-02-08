@@ -72,24 +72,10 @@ static unsigned int mavlink_param_queue_index = 0;
  */
 void mavlink_pm_callback(void *arg, param_t param);
 
-/**
- * Save parameters to EEPROM.
- *
- * Stores the parameters to /eeprom/parameters
- */
-static int mavlink_pm_save_eeprom(void);
-
-/**
- * Load parameters from EEPROM.
- *
- * Loads the parameters from /eeprom/parameters
- */
-static int mavlink_pm_load_eeprom(void);
-
 void mavlink_pm_callback(void *arg, param_t param)
 {
 	mavlink_pm_send_param(param);
-	usleep(*(unsigned int*)arg);
+	usleep(*(unsigned int *)arg);
 }
 
 void mavlink_pm_send_all_params(unsigned int delay)
@@ -104,6 +90,7 @@ int mavlink_pm_queued_send()
 		mavlink_pm_send_param(param_for_index(mavlink_param_queue_index));
 		mavlink_param_queue_index++;
 		return 0;
+
 	} else {
 		return 1;
 	}
@@ -119,7 +106,7 @@ int mavlink_pm_send_param_for_index(uint16_t index)
 	return mavlink_pm_send_param(param_for_index(index));
 }
 
-int mavlink_pm_send_param_for_name(const char* name)
+int mavlink_pm_send_param_for_name(const char *name)
 {
 	return mavlink_pm_send_param(param_find(name));
 }
@@ -137,16 +124,19 @@ int mavlink_pm_send_param(param_t param)
 	param_type_t type = param_type(param);
 	/* copy parameter name */
 	strncpy((char *)name_buf, param_name(param), MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN);
-	
+
 	/*
 	 * Map onboard parameter type to MAVLink type,
 	 * endianess matches (both little endian)
 	 */
 	uint8_t mavlink_type;
+
 	if (type == PARAM_TYPE_INT32) {
 		mavlink_type = MAVLINK_TYPE_INT32_T;
+
 	} else if (type == PARAM_TYPE_FLOAT) {
 		mavlink_type = MAVLINK_TYPE_FLOAT;
+
 	} else {
 		mavlink_type = MAVLINK_TYPE_FLOAT;
 	}
@@ -157,7 +147,10 @@ int mavlink_pm_send_param(param_t param)
 	 */
 
 	int ret;
-	if ((ret = param_get(param, &val_buf)) != OK) return ret;
+
+	if ((ret = param_get(param, &val_buf)) != OK) {
+		return ret;
+	}
 
 	mavlink_msg_param_value_pack_chan(mavlink_system.sysid,
 					  mavlink_system.compid,
@@ -172,74 +165,16 @@ int mavlink_pm_send_param(param_t param)
 	return ret;
 }
 
-static const char *mavlink_parameter_file = "/eeprom/parameters";
-
-/**
- * @return 0 on success, -1 if device open failed, -2 if writing parameters failed
- */
-static int mavlink_pm_save_eeprom()
-{
-	/* delete the file in case it exists */
-	unlink(mavlink_parameter_file);
-
-	/* create the file */
-	int fd = open(mavlink_parameter_file, O_WRONLY | O_CREAT | O_EXCL);
-
-	if (fd < 0) {
-		warn("opening '%s' for writing failed", mavlink_parameter_file);
-		return -1;
-	}
-
-	int result = param_export(fd, false);
-	close(fd);
-
-	if (result != 0) {
-		unlink(mavlink_parameter_file);
-		warn("error exporting parameters to '%s'", mavlink_parameter_file);
-		return -2;
-	}
-
-	return 0;
-}
-
-/**
- * @return 0 on success, 1 if all params have not yet been stored, -1 if device open failed, -2 if writing parameters failed
- */
-static int
-mavlink_pm_load_eeprom()
-{
-	int fd = open(mavlink_parameter_file, O_RDONLY);
-
-	if (fd < 0) {
-		/* no parameter file is OK, otherwise this is an error */
-		if (errno != ENOENT) {
-			warn("open '%s' for reading failed", mavlink_parameter_file);
-			return -1;
-		}
-		return 1;
-	}
-
-	int result = param_load(fd);
-	close(fd);
-
-	if (result != 0) {
-		warn("error reading parameters from '%s'", mavlink_parameter_file);
-		return -2;
-	}
-
-	return 0;
-}
-
 void mavlink_pm_message_handler(const mavlink_channel_t chan, const mavlink_message_t *msg)
 {
 	switch (msg->msgid) {
-		case MAVLINK_MSG_ID_PARAM_REQUEST_LIST: {
+	case MAVLINK_MSG_ID_PARAM_REQUEST_LIST: {
 			/* Start sending parameters */
 			mavlink_pm_start_queued_send();
 			mavlink_missionlib_send_gcs_string("[mavlink pm] sending list");
 		} break;
 
-		case MAVLINK_MSG_ID_PARAM_SET: {
+	case MAVLINK_MSG_ID_PARAM_SET: {
 
 			/* Handle parameter setting */
 
@@ -249,7 +184,7 @@ void mavlink_pm_message_handler(const mavlink_channel_t chan, const mavlink_mess
 
 				if (mavlink_param_set.target_system == mavlink_system.sysid && ((mavlink_param_set.target_component == mavlink_system.compid) || (mavlink_param_set.target_component == MAV_COMP_ID_ALL))) {
 					/* local name buffer to enforce null-terminated string */
-					char name[MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN+1];
+					char name[MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN + 1];
 					strncpy(name, mavlink_param_set.param_id, MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN);
 					/* enforce null termination */
 					name[MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN] = '\0';
@@ -260,6 +195,7 @@ void mavlink_pm_message_handler(const mavlink_channel_t chan, const mavlink_mess
 						char buf[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN];
 						sprintf(buf, "[mavlink pm] unknown: %s", name);
 						mavlink_missionlib_send_gcs_string(buf);
+
 					} else {
 						/* set and send parameter */
 						param_set(param, &(mavlink_param_set.param_value));
@@ -269,88 +205,27 @@ void mavlink_pm_message_handler(const mavlink_channel_t chan, const mavlink_mess
 			}
 		} break;
 
-		case MAVLINK_MSG_ID_PARAM_REQUEST_READ: {
+	case MAVLINK_MSG_ID_PARAM_REQUEST_READ: {
 			mavlink_param_request_read_t mavlink_param_request_read;
 			mavlink_msg_param_request_read_decode(msg, &mavlink_param_request_read);
 
-				if (mavlink_param_request_read.target_system == mavlink_system.sysid && ((mavlink_param_request_read.target_component == mavlink_system.compid) || (mavlink_param_request_read.target_component == MAV_COMP_ID_ALL))) {
-					/* when no index is given, loop through string ids and compare them */
-					if (mavlink_param_request_read.param_index == -1) {
-						/* local name buffer to enforce null-terminated string */
-						char name[MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN+1];
-						strncpy(name, mavlink_param_request_read.param_id, MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN);
-						/* enforce null termination */
-						name[MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN] = '\0';
-						/* attempt to find parameter and send it */
-						mavlink_pm_send_param_for_name(name);
-					} else {
-						/* when index is >= 0, send this parameter again */
-						mavlink_pm_send_param_for_index(mavlink_param_request_read.param_index);
-					}
-				}
+			if (mavlink_param_request_read.target_system == mavlink_system.sysid && ((mavlink_param_request_read.target_component == mavlink_system.compid) || (mavlink_param_request_read.target_component == MAV_COMP_ID_ALL))) {
+				/* when no index is given, loop through string ids and compare them */
+				if (mavlink_param_request_read.param_index == -1) {
+					/* local name buffer to enforce null-terminated string */
+					char name[MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN + 1];
+					strncpy(name, mavlink_param_request_read.param_id, MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN);
+					/* enforce null termination */
+					name[MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN] = '\0';
+					/* attempt to find parameter and send it */
+					mavlink_pm_send_param_for_name(name);
 
-		} break;
-
-		case MAVLINK_MSG_ID_COMMAND_LONG: {
-			mavlink_command_long_t cmd_mavlink;
-			mavlink_msg_command_long_decode(msg, &cmd_mavlink);
-
-			uint8_t result = MAV_RESULT_UNSUPPORTED;
-
-			if (cmd_mavlink.target_system == mavlink_system.sysid &&
-				((cmd_mavlink.target_component == mavlink_system.compid) ||(cmd_mavlink.target_component == MAV_COMP_ID_ALL))) {
-
-				/* preflight parameter load / store */
-				if (cmd_mavlink.command == MAV_CMD_PREFLIGHT_STORAGE) {
-					/* Read all parameters from EEPROM to RAM */
-
-					if (((int)(cmd_mavlink.param1)) == 0)	{
-
-						/* read all parameters from EEPROM to RAM */
-						int read_ret = mavlink_pm_load_eeprom();
-						if (read_ret == OK) {
-							//printf("[mavlink pm] Loaded EEPROM params in RAM\n");
-							mavlink_missionlib_send_gcs_string("[mavlink pm] OK loaded EEPROM params");
-							result = MAV_RESULT_ACCEPTED;
-						} else if (read_ret == 1) {
-							mavlink_missionlib_send_gcs_string("[mavlink pm] No stored parameters to load");
-							result = MAV_RESULT_ACCEPTED;
-						} else {
-							if (read_ret < -1) {
-								mavlink_missionlib_send_gcs_string("[mavlink pm] ERR loading params from EEPROM");
-							} else {
-								mavlink_missionlib_send_gcs_string("[mavlink pm] ERR loading params, no EEPROM found");
-							}
-							result = MAV_RESULT_FAILED;
-						}
-
-					} else if (((int)(cmd_mavlink.param1)) == 1)	{
-
-						/* write all parameters from RAM to EEPROM */
-						int write_ret = mavlink_pm_save_eeprom();
-						if (write_ret == OK) {
-							mavlink_missionlib_send_gcs_string("[mavlink pm] OK params written to EEPROM");
-							result = MAV_RESULT_ACCEPTED;
-
-						} else {
-							if (write_ret < -1) {
-								mavlink_missionlib_send_gcs_string("[mavlink pm] ERR writing params to EEPROM");
-							} else {
-								mavlink_missionlib_send_gcs_string("[mavlink pm] ERR writing params, no EEPROM found");
-							}
-							result = MAV_RESULT_FAILED;
-						}
-
-					} else {
-						//fprintf(stderr, "[mavlink pm] refusing unsupported storage request\n");
-						mavlink_missionlib_send_gcs_string("[mavlink pm] refusing unsupported STOR request");
-						result = MAV_RESULT_UNSUPPORTED;
-					}
+				} else {
+					/* when index is >= 0, send this parameter again */
+					mavlink_pm_send_param_for_index(mavlink_param_request_read.param_index);
 				}
 			}
 
-			/* send back command result */
-			//mavlink_msg_command_ack_send(chan, cmd.command, result);
 		} break;
 	}
 }

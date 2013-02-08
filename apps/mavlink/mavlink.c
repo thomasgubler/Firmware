@@ -77,7 +77,7 @@
 /* define MAVLink specific parameters */
 PARAM_DEFINE_INT32(MAV_SYS_ID, 1);
 PARAM_DEFINE_INT32(MAV_COMP_ID, 50);
-PARAM_DEFINE_INT32(MAV_TYPE, MAV_TYPE_QUADROTOR);
+PARAM_DEFINE_INT32(MAV_TYPE, MAV_TYPE_FIXED_WING);
 
 __EXPORT int mavlink_main(int argc, char *argv[]);
 
@@ -98,7 +98,7 @@ static bool mavlink_link_termination_allowed = false;
 mavlink_system_t mavlink_system = {
 	100,
 	50,
-	MAV_TYPE_QUADROTOR,
+	MAV_TYPE_FIXED_WING,
 	0,
 	0,
 	0
@@ -132,6 +132,7 @@ static struct mavlink_logbuffer lb;
 static void mavlink_update_system(void);
 static int mavlink_open_uart(int baudrate, const char *uart_name, struct termios *uart_config_original, bool *is_usb);
 static void usage(void);
+int set_mavlink_interval_limit(struct mavlink_subscriptions *subs, int mavlink_msg_id, int min_interval);
 
 
 
@@ -143,14 +144,13 @@ set_hil_on_off(bool hil_enabled)
 	/* Enable HIL */
 	if (hil_enabled && !mavlink_hil_enabled) {
 
-		//printf("\n HIL ON \n");
-
 		/* Advertise topics */
 		pub_hil_attitude = orb_advertise(ORB_ID(vehicle_attitude), &hil_attitude);
 		pub_hil_global_pos = orb_advertise(ORB_ID(vehicle_global_position), &hil_global_pos);
 
-		printf("\n pub_hil_attitude :%i\n", pub_hil_attitude);
-		printf("\n pub_hil_global_pos :%i\n", pub_hil_global_pos);
+		/* sensore level hil */
+		pub_hil_sensors = orb_advertise(ORB_ID(sensor_combined), &hil_sensors);
+		pub_hil_gps = orb_advertise(ORB_ID(vehicle_gps_position), &hil_gps);
 
 		mavlink_hil_enabled = true;
 
@@ -160,21 +160,22 @@ set_hil_on_off(bool hil_enabled)
 		if (baudrate < 19200) {
 			/* 10 Hz */
 			hil_rate_interval = 100;
+
 		} else if (baudrate < 38400) {
 			/* 10 Hz */
 			hil_rate_interval = 100;
+
 		} else if (baudrate < 115200) {
 			/* 20 Hz */
 			hil_rate_interval = 50;
-		} else if (baudrate < 460800) {
-			/* 50 Hz */
-			hil_rate_interval = 20;
+
 		} else {
-			/* 100 Hz */
-			hil_rate_interval = 10;
+			/* 200 Hz */
+			hil_rate_interval = 5;
 		}
 
 		orb_set_interval(mavlink_subs.spa_sub, hil_rate_interval);
+		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_SERVO_OUTPUT_RAW, hil_rate_interval);
 	}
 
 	if (!hil_enabled && mavlink_hil_enabled) {
@@ -195,17 +196,38 @@ get_mavlink_mode_and_state(uint8_t *mavlink_state, uint8_t *mavlink_mode)
 	*mavlink_mode = 0;
 
 	/* set mode flags independent of system state */
+
+	/* HIL */
+	if (v_status.flag_hil_enabled) {
+		*mavlink_mode |= MAV_MODE_FLAG_HIL_ENABLED;
+	}
+
+	/* manual input */
 	if (v_status.flag_control_manual_enabled) {
 		*mavlink_mode |= MAV_MODE_FLAG_MANUAL_INPUT_ENABLED;
 	}
 
-	if (v_status.flag_hil_enabled) {
-		*mavlink_mode |= MAV_MODE_FLAG_HIL_ENABLED;
+	/* attitude or rate control */
+	if (v_status.flag_control_attitude_enabled ||
+	    v_status.flag_control_rates_enabled) {
+		*mavlink_mode |= MAV_MODE_FLAG_STABILIZE_ENABLED;
+	}
+
+	/* vector control */
+	if (v_status.flag_control_velocity_enabled ||
+	    v_status.flag_control_position_enabled) {
+		*mavlink_mode |= MAV_MODE_FLAG_GUIDED_ENABLED;
+	}
+
+	/* autonomous mode */
+	if (v_status.state_machine == SYSTEM_STATE_AUTO) {
+		*mavlink_mode |= MAV_MODE_FLAG_AUTO_ENABLED;
 	}
 
 	/* set arming state */
 	if (armed.armed) {
 		*mavlink_mode |= MAV_MODE_FLAG_SAFETY_ARMED;
+
 	} else {
 		*mavlink_mode &= ~MAV_MODE_FLAG_SAFETY_ARMED;
 	}
@@ -216,9 +238,11 @@ get_mavlink_mode_and_state(uint8_t *mavlink_state, uint8_t *mavlink_mode)
 		    v_status.flag_preflight_mag_calibration ||
 		    v_status.flag_preflight_accel_calibration) {
 			*mavlink_state = MAV_STATE_CALIBRATING;
+
 		} else {
 			*mavlink_state = MAV_STATE_UNINIT;
 		}
+
 		break;
 
 	case SYSTEM_STATE_STANDBY:
@@ -231,17 +255,14 @@ get_mavlink_mode_and_state(uint8_t *mavlink_state, uint8_t *mavlink_mode)
 
 	case SYSTEM_STATE_MANUAL:
 		*mavlink_state = MAV_STATE_ACTIVE;
-		*mavlink_mode |= MAV_MODE_FLAG_MANUAL_INPUT_ENABLED;
 		break;
 
 	case SYSTEM_STATE_STABILIZED:
 		*mavlink_state = MAV_STATE_ACTIVE;
-		*mavlink_mode |= MAV_MODE_FLAG_STABILIZE_ENABLED;
 		break;
 
 	case SYSTEM_STATE_AUTO:
 		*mavlink_state = MAV_STATE_ACTIVE;
-		*mavlink_mode |= MAV_MODE_FLAG_GUIDED_ENABLED;
 		break;
 
 	case SYSTEM_STATE_MISSION_ABORT:
@@ -268,46 +289,53 @@ get_mavlink_mode_and_state(uint8_t *mavlink_state, uint8_t *mavlink_mode)
 }
 
 
-static int set_mavlink_interval_limit(struct mavlink_subscriptions *subs, int mavlink_msg_id, int min_interval)
+int set_mavlink_interval_limit(struct mavlink_subscriptions *subs, int mavlink_msg_id, int min_interval)
 {
 	int ret = OK;
 
 	switch (mavlink_msg_id) {
-		case MAVLINK_MSG_ID_SCALED_IMU:
-			/* sensor sub triggers scaled IMU */
-			orb_set_interval(subs->sensor_sub, min_interval);
-			break;
-		case MAVLINK_MSG_ID_HIGHRES_IMU:
-			/* sensor sub triggers highres IMU */
-			orb_set_interval(subs->sensor_sub, min_interval);
-			break;
-		case MAVLINK_MSG_ID_RAW_IMU:
-			/* sensor sub triggers RAW IMU */
-			orb_set_interval(subs->sensor_sub, min_interval);
-			break;
-		case MAVLINK_MSG_ID_ATTITUDE:
-			/* attitude sub triggers attitude */
-			orb_set_interval(subs->att_sub, min_interval);
-			break;
-		case MAVLINK_MSG_ID_SERVO_OUTPUT_RAW:
-			/* actuator_outputs triggers this message */
-			orb_set_interval(subs->act_0_sub, min_interval);
-			orb_set_interval(subs->act_1_sub, min_interval);
-			orb_set_interval(subs->act_2_sub, min_interval);
-			orb_set_interval(subs->act_3_sub, min_interval);
-			orb_set_interval(subs->actuators_sub, min_interval);
-			break;
-		case MAVLINK_MSG_ID_MANUAL_CONTROL:
-			/* manual_control_setpoint triggers this message */
-			orb_set_interval(subs->man_control_sp_sub, min_interval);
-			break;
-		case MAVLINK_MSG_ID_NAMED_VALUE_FLOAT:
-			orb_set_interval(subs->debug_key_value, min_interval);
-			break;
-		default:
-			/* not found */
-			ret = ERROR;
-			break;
+	case MAVLINK_MSG_ID_SCALED_IMU:
+		/* sensor sub triggers scaled IMU */
+		orb_set_interval(subs->sensor_sub, min_interval);
+		break;
+
+	case MAVLINK_MSG_ID_HIGHRES_IMU:
+		/* sensor sub triggers highres IMU */
+		orb_set_interval(subs->sensor_sub, min_interval);
+		break;
+
+	case MAVLINK_MSG_ID_RAW_IMU:
+		/* sensor sub triggers RAW IMU */
+		orb_set_interval(subs->sensor_sub, min_interval);
+		break;
+
+	case MAVLINK_MSG_ID_ATTITUDE:
+		/* attitude sub triggers attitude */
+		orb_set_interval(subs->att_sub, min_interval);
+		break;
+
+	case MAVLINK_MSG_ID_SERVO_OUTPUT_RAW:
+		/* actuator_outputs triggers this message */
+		orb_set_interval(subs->act_0_sub, min_interval);
+		orb_set_interval(subs->act_1_sub, min_interval);
+		orb_set_interval(subs->act_2_sub, min_interval);
+		orb_set_interval(subs->act_3_sub, min_interval);
+		orb_set_interval(subs->actuators_sub, min_interval);
+		break;
+
+	case MAVLINK_MSG_ID_MANUAL_CONTROL:
+		/* manual_control_setpoint triggers this message */
+		orb_set_interval(subs->man_control_sp_sub, min_interval);
+		break;
+
+	case MAVLINK_MSG_ID_NAMED_VALUE_FLOAT:
+		orb_set_interval(subs->debug_key_value, min_interval);
+		break;
+
+	default:
+		/* not found */
+		ret = ERROR;
+		break;
 	}
 
 	return ret;
@@ -449,7 +477,7 @@ int mavlink_open_uart(int baud, const char *uart_name, struct termios *uart_conf
 	return uart;
 }
 
-void 
+void
 mavlink_send_uart_bytes(mavlink_channel_t channel, uint8_t *ch, int length)
 {
 	write(uart, ch, (size_t)(sizeof(uint8_t) * length));
@@ -458,49 +486,53 @@ mavlink_send_uart_bytes(mavlink_channel_t channel, uint8_t *ch, int length)
 /*
  * Internal function to give access to the channel status for each channel
  */
-mavlink_status_t* mavlink_get_channel_status(uint8_t chan)
+mavlink_status_t *mavlink_get_channel_status(uint8_t channel)
 {
 	static mavlink_status_t m_mavlink_status[MAVLINK_COMM_NUM_BUFFERS];
-	return &m_mavlink_status[chan];
+	return &m_mavlink_status[channel];
 }
 
 /*
  * Internal function to give access to the channel buffer for each channel
  */
-mavlink_message_t* mavlink_get_channel_buffer(uint8_t chan)
+mavlink_message_t *mavlink_get_channel_buffer(uint8_t channel)
 {
 	static mavlink_message_t m_mavlink_buffer[MAVLINK_COMM_NUM_BUFFERS];
-	return &m_mavlink_buffer[chan];
+	return &m_mavlink_buffer[channel];
 }
 
 void mavlink_update_system(void)
 {
 	static bool initialized = false;
-	param_t param_system_id;
-	param_t param_component_id;
-	param_t param_system_type;
+	static param_t param_system_id;
+	static param_t param_component_id;
+	static param_t param_system_type;
 
 	if (!initialized) {
 		param_system_id = param_find("MAV_SYS_ID");
 		param_component_id = param_find("MAV_COMP_ID");
 		param_system_type = param_find("MAV_TYPE");
+		initialized = true;
 	}
 
 	/* update system and component id */
 	int32_t system_id;
 	param_get(param_system_id, &system_id);
+
 	if (system_id > 0 && system_id < 255) {
 		mavlink_system.sysid = system_id;
 	}
 
 	int32_t component_id;
 	param_get(param_component_id, &component_id);
+
 	if (component_id > 0 && component_id < 255) {
 		mavlink_system.compid = component_id;
 	}
-	
+
 	int32_t system_type;
 	param_get(param_system_type, &system_type);
+
 	if (system_type >= 0 && system_type < MAV_TYPE_ENUM_END) {
 		mavlink_system.type = system_type;
 	}
@@ -526,8 +558,10 @@ int mavlink_thread_main(int argc, char *argv[])
 		switch (ch) {
 		case 'b':
 			baudrate = strtoul(optarg, NULL, 10);
+
 			if (baudrate == 0)
 				errx(1, "invalid baud rate '%s'", optarg);
+
 			break;
 
 		case 'd':
@@ -548,16 +582,21 @@ int mavlink_thread_main(int argc, char *argv[])
 	}
 
 	struct termios uart_config_original;
+
 	bool usb_uart;
 
 	/* print welcome text */
 	warnx("MAVLink v1.0 serial interface starting...");
+
+	/* inform about mode */
+	warnx((mavlink_link_mode == MAVLINK_INTERFACE_MODE_ONBOARD) ? "ONBOARD MODE" : "DOWNLINK MODE");
 
 	/* Flush stdout in case MAVLink is about to take it over */
 	fflush(stdout);
 
 	/* default values for arguments */
 	uart = mavlink_open_uart(baudrate, device_name, &uart_config_original, &usb_uart);
+
 	if (uart < 0)
 		err(1, "could not open %s", device_name);
 
@@ -588,17 +627,18 @@ int mavlink_thread_main(int argc, char *argv[])
 		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_SERVO_OUTPUT_RAW, 50);
 		/* 2 Hz */
 		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_MANUAL_CONTROL, 100);
+
 	} else if (baudrate >= 115200) {
-		/* 50 Hz / 20 ms */
-		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_HIGHRES_IMU, 200);
-		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_RAW_IMU, 200);
 		/* 20 Hz / 50 ms */
-		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_ATTITUDE, 200);
-		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_NAMED_VALUE_FLOAT, 200);
-		/* 10 Hz / 100 ms */
+		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_HIGHRES_IMU, 50);
+		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_RAW_IMU, 50);
+		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_ATTITUDE, 50);
+		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_NAMED_VALUE_FLOAT, 50);
+		/* 5 Hz / 100 ms */
 		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_SERVO_OUTPUT_RAW, 200);
-		/* 1 Hz */
-		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_MANUAL_CONTROL, 1000);
+		/* 2 Hz */
+		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_MANUAL_CONTROL, 500);
+
 	} else if (baudrate >= 57600) {
 		/* 10 Hz / 100 ms */
 		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_RAW_IMU, 300);
@@ -611,6 +651,7 @@ int mavlink_thread_main(int argc, char *argv[])
 		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_SERVO_OUTPUT_RAW, 500);
 		/* 2 Hz */
 		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_MANUAL_CONTROL, 500);
+
 	} else {
 		/* very low baud rate, limit to 1 Hz / 1000 ms */
 		set_mavlink_interval_limit(&mavlink_subs, MAVLINK_MSG_ID_RAW_IMU, 1000);
@@ -663,6 +704,7 @@ int mavlink_thread_main(int argc, char *argv[])
 						    v_status.errors_count4);
 			lowspeed_counter = 0;
 		}
+
 		lowspeed_counter++;
 
 		/* sleep quarter the time */
@@ -679,6 +721,7 @@ int mavlink_thread_main(int argc, char *argv[])
 
 		/* sleep quarter the time */
 		usleep(25000);
+
 		if (baudrate > 57600) {
 			mavlink_pm_queued_send();
 		}
@@ -690,6 +733,7 @@ int mavlink_thread_main(int argc, char *argv[])
 		if (!mavlink_logbuffer_is_empty(&lb)) {
 			struct mavlink_logmessage msg;
 			int lb_ret = mavlink_logbuffer_read(&lb, &msg);
+
 			if (lb_ret == OK) {
 				mavlink_missionlib_send_gcs_string(msg.text);
 			}
@@ -715,17 +759,19 @@ int mavlink_thread_main(int argc, char *argv[])
 static void
 usage()
 {
-	fprintf(stderr, "usage: mavlink start [-d <devicename>] [-b <baud rate>] [-e] [-o]\n"
-			"       mavlink stop\n"
-			"       mavlink status\n");
+	fprintf(stderr, "usage: mavlink start [-d <devicename>] [-b <baud rate>]\n"
+		"       mavlink stop\n"
+		"       mavlink status\n");
 	exit(1);
 }
 
 int mavlink_main(int argc, char *argv[])
 {
 
-	if (argc < 1)
-		errx(1, "missing command");
+	if (argc < 2) {
+		warnx("missing command");
+		usage();
+	}
 
 	if (!strcmp(argv[1], "start")) {
 
@@ -737,17 +783,20 @@ int mavlink_main(int argc, char *argv[])
 		mavlink_task = task_spawn("mavlink",
 					  SCHED_DEFAULT,
 					  SCHED_PRIORITY_DEFAULT,
-					  6000,
+					  2048,
 					  mavlink_thread_main,
-					  (const char**)argv);
+					  (const char **)argv);
 		exit(0);
 	}
 
 	if (!strcmp(argv[1], "stop")) {
 		thread_should_exit = true;
+
 		while (thread_running) {
 			usleep(200000);
+			printf(".");
 		}
+
 		warnx("terminated.");
 		exit(0);
 	}
@@ -755,11 +804,15 @@ int mavlink_main(int argc, char *argv[])
 	if (!strcmp(argv[1], "status")) {
 		if (thread_running) {
 			errx(0, "running");
+
 		} else {
 			errx(1, "not running");
 		}
 	}
 
-	errx(1, "unrecognized command");
+	warnx("unrecognized command");
+	usage();
+	/* not getting here */
+	return 0;
 }
 
