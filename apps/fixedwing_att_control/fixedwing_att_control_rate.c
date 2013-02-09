@@ -178,6 +178,8 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 	const float deltaT = (hrt_absolute_time() - last_run) / 1000000.0f;
 	last_run = hrt_absolute_time();
 
+	const float rate_norm_c = M_PI_F;
+
 	if(!initialized) {
 		parameters_init(&h);
 		parameters_update(&h, &p);
@@ -191,33 +193,35 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 	if (counter % 100 == 0) {
 		/* update parameters from storage */
 		parameters_update(&h, &p);
+		pid_set_parameters(&roll_rate_controller, p.rollrate_p, p.rollrate_i, 0, p.rollrate_awu, 1);
+		pid_set_parameters(&pitch_rate_controller, p.pitchrate_p, p.pitchrate_i, 0, p.pitchrate_awu, 1);
+		pid_set_parameters(&yaw_rate_controller, p.yawrate_p, p.yawrate_i, 0, p.yawrate_awu, 1);
 	}
+
+	/* Normalization */
+	float rate_sp_norm[3] = {rate_sp->roll/rate_norm_c, rate_sp->pitch/rate_norm_c, rate_sp->yaw/rate_norm_c};
+	float rates_norm[3] = {rates[0]/rate_norm_c, rates[1]/rate_norm_c, rates[2]/rate_norm_c};
 
 	//TODO for the moment we use groundspeed here instead of the true airspeed
-	float airspeed_square_inv;
-	float airspeed_square = fabsf(speed_body[0] * speed_body[0] + speed_body[1] * speed_body[1] + speed_body[2] * speed_body[2]);
-	if(airspeed_square > 0) {
-		airspeed_square_inv = 1.0f / airspeed_square;
-	}
-	else
-	{
-		airspeed_square_inv = 1000.0f; //XXX (max speed)^2?
-	}
+	float airspeed_square_inv_scaled;
+	float airspeed_square = fabs(speed_body[0] * speed_body[0] + speed_body[1] * speed_body[1] + speed_body[2] * speed_body[2]);
+	airspeed_square_inv_scaled = 22.0f * 22.0f / airspeed_square; //xxx: 22 = average speed
 
-	/* scale control parameters (less control surface deflection at higher seeds */
-	pid_set_parameters(&roll_rate_controller, p.rollrate_p * airspeed_square_inv, p.rollrate_i  * airspeed_square_inv, 0, p.rollrate_awu, 1);
-	pid_set_parameters(&pitch_rate_controller, p.pitchrate_p * airspeed_square_inv, p.pitchrate_i * airspeed_square_inv, 0, p.pitchrate_awu, 1);
-	pid_set_parameters(&yaw_rate_controller, p.yawrate_p * airspeed_square_inv, p.yawrate_i * airspeed_square_inv, 0, p.yawrate_awu, 1);
 
 	/* roll rate (PI) */
-	actuators->control[0] = pid_calculate(&roll_rate_controller, rate_sp->roll, rates[0], 0.0f, deltaT);
+	actuators->control[0] = airspeed_square_inv_scaled * pid_calculate(&roll_rate_controller, rate_sp_norm[0], rates_norm[0], 0.0f, deltaT)
+			;
 	/* pitch rate (PI) */
-	actuators->control[1] = pid_calculate(&pitch_rate_controller, rate_sp->pitch, rates[1], 0.0f, deltaT);
+	float temp = pid_calculate(&pitch_rate_controller, rate_sp_norm[1], rates_norm[1], 0.0f, deltaT);
+	actuators->control[1] = airspeed_square_inv_scaled * temp;
 	//TODO XXX the feedforward below is dangerous, as soon as the throttle/elevator MIMO controller is ready this has to be removed
 	/* set pitch minus feedforward throttle compensation (nose pitches up from throttle */
 	actuators->control[1] += (-1.0f) * p.pitch_thr_ff * rate_sp->thrust;
+
+	//printf("rate_sp_norm[1]: %.4f, rates_norm[1]: %.4f, actuators->control[1] %.4f,  actuators->control[1] (pure) p %.4f, airspeed_square_inv_scaled %.4f\n", (double)rate_sp_norm[1], (double)rates_norm[1], (double)actuators->control[1], (double)temp, (double)airspeed_square_inv_scaled);
+
 	/* yaw rate (PI) */
-	actuators->control[2] = pid_calculate(&yaw_rate_controller, rate_sp->yaw, rates[2], 0.0f, deltaT);
+	actuators->control[2] = airspeed_square_inv_scaled * pid_calculate(&yaw_rate_controller, rate_sp_norm[2], rates_norm[2], 0.0f, deltaT);
 
 	counter++;
 

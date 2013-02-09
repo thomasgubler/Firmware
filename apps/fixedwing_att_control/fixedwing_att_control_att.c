@@ -59,9 +59,6 @@
 #include <systemlib/geo/geo.h>
 #include <systemlib/systemlib.h>
 
-
-
-
 struct fw_att_control_params {
 	float roll_p;
 	float rollrate_lim;
@@ -129,12 +126,16 @@ int fixedwing_att_control_attitude(const struct vehicle_attitude_setpoint_s *att
 	static PID_t roll_controller;
 	static PID_t pitch_controller;
 
+	const float roll_norm_c = M_PI_F;
+	const float pitch_norm_c = M_PI_2_F;
+	const float yaw_norm_c = M_PI_F;
+	const float rate_norm_c = M_PI_F;
 
 	if (!initialized) {
 		parameters_init(&h);
 		parameters_update(&h, &p);
-		pid_init(&roll_controller, p.roll_p, 0, 0, 0, p.rollrate_lim, PID_MODE_DERIVATIV_NONE); //P Controller
-		pid_init(&pitch_controller, p.pitch_p, 0, 0, 0, p.pitchrate_lim, PID_MODE_DERIVATIV_NONE); //P Controller
+		pid_init(&roll_controller, p.roll_p, 0, 0, 0, p.rollrate_lim/rate_norm_c, PID_MODE_DERIVATIV_NONE); //P Controller
+		pid_init(&pitch_controller, p.pitch_p, 0, 0, 0, p.pitchrate_lim/rate_norm_c, PID_MODE_DERIVATIV_NONE); //P Controller
 		initialized = true;
 	}
 
@@ -142,17 +143,18 @@ int fixedwing_att_control_attitude(const struct vehicle_attitude_setpoint_s *att
 	if (counter % 100 == 0) {
 		/* update parameters from storage */
 		parameters_update(&h, &p);
-		pid_set_parameters(&roll_controller, p.roll_p, 0, 0, 0, p.rollrate_lim);
-		pid_set_parameters(&pitch_controller, p.pitch_p, 0, 0, 0, p.pitchrate_lim);
+		pid_set_parameters(&roll_controller, p.roll_p, 0, 0, 0, p.rollrate_lim/rate_norm_c);
+		pid_set_parameters(&pitch_controller, p.pitch_p, 0, 0, 0, p.pitchrate_lim/rate_norm_c);
 	}
+
+
+	float att_sp_norm[3] = {att_sp->roll_body/roll_norm_c, att_sp->pitch_body/pitch_norm_c, att_sp->yaw_body/yaw_norm_c};
+	float att_norm[3] = {att->roll/roll_norm_c, att->pitch/pitch_norm_c, att->yaw/yaw_norm_c};
 
 
 
 	/* Roll (P) */
-
-	float phi_dot = pid_calculate(&roll_controller, att_sp->roll_body, att->roll, 0, 0);
-
-
+	float phi_dot = pid_calculate(&roll_controller, att_sp_norm[0], att_norm[0], 0, 0);
 
 	/* Pitch (P) */
 
@@ -167,28 +169,27 @@ int fixedwing_att_control_attitude(const struct vehicle_attitude_setpoint_s *att
 		pitch_sp_rollcompensation = -p.pitch_lim - att_sp->pitch_body;
 	}
 
-	float theta_dot = pid_calculate(&pitch_controller,
-			att_sp->pitch_body + pitch_sp_rollcompensation,
-					att->pitch, 0, 0);
+	float theta_dot = pid_calculate(&pitch_controller, (att_sp->pitch_body + pitch_sp_rollcompensation)/pitch_norm_c,
+			att_norm[1], 0, 0);
 
 
 	/* Yaw (from coordinated turn constraint or lateral force) */
 	float psi_dot = (speed_body[2] * phi_dot + 9.81f * sinf(att_sp->roll_body) * cosf(att_sp->pitch_body) + speed_body[0] * theta_dot * sinf(att_sp->roll_body))
 			/ (speed_body[0] * cosf(att_sp->roll_body) * cosf(att_sp->pitch_body) + speed_body[2] * sinf(att_sp->pitch_body));
 
-	/* limit psi_dot *///xxx: parameter?
-	if(psi_dot > 2.0f) {
-		psi_dot = 2.0f;
-	} else if (psi_dot < -2.0f) {
-		psi_dot = -2.0f;
+	/* limit psi_dot */
+	if(psi_dot > p.yawrate_lim) {
+		psi_dot = p.yawrate_lim;
+	} else if (psi_dot < -p.yawrate_lim) {
+		psi_dot = -p.yawrate_lim;
 	}
 	//printf("psi_dot %.4f \n", (double)psi_dot);
 
 
-	/* Use Jacobian to go from euler rates to body rates */
-	rates_sp->roll = phi_dot - sinf(att->pitch) * psi_dot;
-	rates_sp->pitch = cosf(att->roll) * theta_dot + cosf(att->pitch) * sinf(att->roll) * psi_dot;
-	rates_sp->yaw = -sinf(att->roll) * theta_dot + cosf(att->pitch) * cosf(att->roll) * psi_dot;
+	/* Use Jacobian to go from euler rates to body rates (& de-normalization) */
+	rates_sp->roll = (phi_dot - sinf(att->pitch) * psi_dot) * rate_norm_c;
+	rates_sp->pitch = (cosf(att->roll) * theta_dot + cosf(att->pitch) * sinf(att->roll) * psi_dot) * rate_norm_c;
+	rates_sp->yaw = (-sinf(att->roll) * theta_dot + cosf(att->pitch) * cosf(att->roll) * psi_dot) * rate_norm_c;
 
 	counter++;
 

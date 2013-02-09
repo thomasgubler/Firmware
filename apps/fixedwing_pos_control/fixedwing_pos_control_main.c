@@ -249,8 +249,6 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 		float psi_track = 0.0f;
 
-		int counter = 0;
-
 		struct fw_pos_control_params p;
 		struct fw_pos_control_param_handles h;
 
@@ -259,12 +257,21 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		PID_t offtrack_controller;
 		PID_t altitude_controller;
 
+		const float delta_psi_c_norm_c = 60.0f*M_DEG_TO_RAD_F;
+		const float delta_psi_rate_c_norm_c = M_PI_F;
+		const float alt_norm_c = 2000;
+		const float distance_norm_c = 300;
+		const float psi_e_norm_c = M_PI_F;
+		const float psi_rate_e_scaled_norm_c = M_PI_F;
+		const float roll_norm_c = M_PI_F;
+		const float pitch_norm_c = M_PI_2_F;
+
 		parameters_init(&h);
 		parameters_update(&h, &p);
-		pid_init(&heading_controller, p.heading_p, 0.0f, 0.0f, 0.0f, 10000.0f, PID_MODE_DERIVATIV_NONE); //arbitrary high limit
-		pid_init(&heading_rate_controller, p.headingr_p, p.headingr_i, 0.0f, p.headingr_awu, p.roll_lim, PID_MODE_DERIVATIV_NONE);
-		pid_init(&altitude_controller, p.altitude_p, 0.0f, 0.0f, 0.0f, p.pitch_lim, PID_MODE_DERIVATIV_NONE);
-		pid_init(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu , 30.0f*M_DEG_TO_RAD_F, PID_MODE_DERIVATIV_CALC); //TODO: remove hardcoded value
+		pid_init(&heading_controller, p.heading_p, 0.0f, 0.0f, 0.0f, p.headingr_lim/delta_psi_rate_c_norm_c, PID_MODE_DERIVATIV_NONE);
+		pid_init(&heading_rate_controller, p.headingr_p, p.headingr_i, 0.0f, p.headingr_awu, p.roll_lim/roll_norm_c, PID_MODE_DERIVATIV_NONE);
+		pid_init(&altitude_controller, p.altitude_p, 0.0f, 0.0f, 0.0f, p.pitch_lim/pitch_norm_c, PID_MODE_DERIVATIV_NONE);
+		pid_init(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu , 1.0f, PID_MODE_DERIVATIV_CALC); //TODO: remove hardcoded value
 
 		float r_min = fabs(30.0f*30.0f/(9.81*tanf(p.roll_lim))) +10; //V^2/(9.81*tan(roll_max) //XXX: remove hardcoded value
 
@@ -318,11 +325,11 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 					/* update parameters from storage */
 					parameters_update(&h, &p);
-					pid_set_parameters(&heading_controller, p.heading_p, 0, 0, 0, 10000.0f); //arbitrary high limit
-					pid_set_parameters(&heading_rate_controller, p.headingr_p, p.headingr_i, 0, p.headingr_awu, p.roll_lim);
-					pid_set_parameters(&altitude_controller, p.altitude_p, 0, 0, 0, p.pitch_lim);
-					pid_set_parameters(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu, 30.0f*M_DEG_TO_RAD); //TODO: remove hardcoded value
-					r_min = fabs(30.0f*30.0f/(9.81*tanf(p.roll_lim))) + 10; //V^2/(9.81*tan(roll_max) + margin //XXX: remove hardcoded value
+					pid_set_parameters(&heading_controller, p.heading_p, 0, 0, 0, p.headingr_lim/delta_psi_rate_c_norm_c); //arbitrary high limit
+					pid_set_parameters(&heading_rate_controller, p.headingr_p, p.headingr_i, 0, p.headingr_awu, p.roll_lim/roll_norm_c);
+					pid_set_parameters(&altitude_controller, p.altitude_p, 0, 0, 0, p.pitch_lim/pitch_norm_c);
+					pid_set_parameters(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu, 1.0f);
+					r_min = fabs(30.0f*30.0f/(9.81*tanf(p.roll_lim))) + 10.0f; //V^2/(9.81*tan(roll_max) + margin //XXX: remove hardcoded value
 
 				}
 
@@ -526,7 +533,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 //								printf("distance = %0.4f\n",  xtrack_err.distance);
 //							}
 
-							float delta_psi_c = pid_calculate(&offtrack_controller, 0, xtrack_err.distance, 0.0f, deltaT); //p.xtrack_p * xtrack_err.distanc
+							float delta_psi_c = delta_psi_c_norm_c * pid_calculate(&offtrack_controller, 0, xtrack_err.distance/distance_norm_c, 0.0f, deltaT); //p.xtrack_p * xtrack_err.distanc
 							//note: delta_psi_c is limited by the limit of the offtrack_controller
 
 							float psi_c;
@@ -552,7 +559,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 							}
 
 							/* calculate roll setpoint, do this artificially around zero */
-							float delta_psi_rate_c = pid_calculate(&heading_controller, psi_e, 0.0f, 0.0f, 0.0f);
+							float delta_psi_rate_c = delta_psi_rate_c_norm_c * pid_calculate(&heading_controller, psi_e/psi_e_norm_c, 0.0f, 0.0f, 0.0f); // * delta_psi_rate_c_norm_c for de-normalization
 							float psi_rate_track = 0;
 							if (horizontal_navigation_state == HNAV_ARC) {
 								psi_rate_track = sqrtf(global_pos.vx * global_pos.vx +  global_pos.vy * global_pos.vy) / arc.radius;//=V_gr/r_track
@@ -581,7 +588,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 							float psi_rate_e_scaled = psi_rate_e * ground_speed / 9.81f; //* V_gr / g
 
-							attitude_setpoint.roll_body = pid_calculate(&heading_rate_controller, psi_rate_e_scaled, 0.0f, 0.0f, deltaT);
+							attitude_setpoint.roll_body = roll_norm_c * pid_calculate(&heading_rate_controller, psi_rate_e_scaled/psi_rate_e_scaled_norm_c, 0.0f, 0.0f, deltaT);
+							//printf("psi_rate_e_scaled %.4f, psi_rate_e_scaled/psi_rate_e_scaled_norm_c %.4f, roll_body %.4f\n", (double)psi_rate_e_scaled, (double)psi_rate_e_scaled/psi_rate_e_scaled_norm_c, (double)attitude_setpoint.roll_body);
 
 							if (verbose) {
 								printf("psi_rate_c %.4f ", (double)psi_rate_c);
@@ -603,7 +611,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 						{
 
 							//TODO: take care of relative vs. ab. altitude
-							attitude_setpoint.pitch_body = pid_calculate(&altitude_controller, current_navigation_setpoint.altitude, global_pos.alt, 0.0f, 0.0f);
+							attitude_setpoint.pitch_body = pitch_norm_c * pid_calculate(&altitude_controller, current_navigation_setpoint.altitude/alt_norm_c, global_pos.alt/alt_norm_c, 0.0f, 0.0f);
 
 						}
 
@@ -616,7 +624,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 						/* measure in what intervals the controller runs */
 						perf_count(fw_interval_perf);
 
-						counter++;
+
 
 					} else {
 						// XXX no setpoint, decent default needed (loiter?)
