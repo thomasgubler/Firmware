@@ -172,7 +172,6 @@ int fixedwing_att_control_attitude(const struct vehicle_attitude_setpoint_s *att
 	float theta_dot = pid_calculate(&pitch_controller, (att_sp->pitch_body + pitch_sp_rollcompensation)/pitch_norm_c,
 			att_norm[1], 0, 0);
 
-
 	/* Yaw (from coordinated turn constraint or lateral force) */
 	float psi_dot = (speed_body[2] * phi_dot + 9.81f * sinf(att_sp->roll_body) * cosf(att_sp->pitch_body) + speed_body[0] * theta_dot * sinf(att_sp->roll_body))
 			/ (speed_body[0] * cosf(att_sp->roll_body) * cosf(att_sp->pitch_body) + speed_body[2] * sinf(att_sp->pitch_body));

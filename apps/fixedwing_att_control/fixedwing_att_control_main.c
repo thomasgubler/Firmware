@@ -237,6 +237,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 					fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators);
 
 					/* pass through throttle */
+					rates_sp.thrust =  att_sp.thrust;
 					actuators.control[3] = att_sp.thrust;
 
 					/* pass through flaps */

@@ -65,6 +65,7 @@
 #include <systemlib/perf_counter.h>
 #include <systemlib/systemlib.h>
 #include <uORB/topics/debug_key_value.h>
+#include <fixedwing_tecs.h>
 
 /*
  * Controller parameters, accessible via MAVLink
@@ -79,9 +80,20 @@ PARAM_DEFINE_FLOAT(FW_XTRACK_D, 0.01745f);
 PARAM_DEFINE_FLOAT(FW_XTRACK_I, 0.01745f);
 PARAM_DEFINE_FLOAT(FW_XTRACK_AWU, 0.01);
 PARAM_DEFINE_FLOAT(FW_ALT_P, 0.1f);
+PARAM_DEFINE_FLOAT(FW_FPA_LIM, 0.35f);
+PARAM_DEFINE_FLOAT(FW_SPEED_P, 0.1f);
+PARAM_DEFINE_FLOAT(FW_ACC_LIM, 3.0f);
 PARAM_DEFINE_FLOAT(FW_ROLL_LIM, 0.7f);	// Roll angle limit in radians
 PARAM_DEFINE_FLOAT(FW_HEADR_P, 0.1f);
 PARAM_DEFINE_FLOAT(FW_PITCH_LIM, 0.35f);	/**< Pitch angle limit in radians per second */
+PARAM_DEFINE_FLOAT(FW_TECS_TP, 0.0f);
+PARAM_DEFINE_FLOAT(FW_TECS_TI, 0.0f);
+PARAM_DEFINE_FLOAT(FW_TECS_EP, 0.0f);
+PARAM_DEFINE_FLOAT(FW_TECS_EI, 0.0f);
+PARAM_DEFINE_FLOAT(FW_TECS_T_AWU, 0.0f);
+PARAM_DEFINE_FLOAT(FW_TECS_E_AWU, 0.0f);
+PARAM_DEFINE_FLOAT(FW_V_CRUISE, 25.0f);
+PARAM_DEFINE_FLOAT(FW_V_ARC, 18.0f);
 
 struct fw_pos_control_params {
 	float heading_p;
@@ -94,8 +106,19 @@ struct fw_pos_control_params {
 	float xtrack_i;
 	float xtrack_awu;
 	float altitude_p;
+	float flight_path_lim;
 	float roll_lim;
 	float pitch_lim;
+	float speed_p;
+	float acceleration_lim;
+	float tecs_ktp;
+	float tecs_kti;
+	float tecs_kep;
+	float tecs_kei;
+	float tecs_t_awu;
+	float tecs_e_awu;
+	float v_cruise;
+	float v_arc;
 };
 
 struct fw_pos_control_param_handles {
@@ -109,8 +132,19 @@ struct fw_pos_control_param_handles {
 	param_t xtrack_i;
 	param_t xtrack_awu;
 	param_t altitude_p;
+	param_t flight_path_lim;
 	param_t roll_lim;
 	param_t pitch_lim;
+	param_t speed_p;
+	param_t acceleration_lim;
+	param_t tecs_ktp;
+	param_t tecs_kti;
+	param_t tecs_kep;
+	param_t tecs_kei;
+	param_t tecs_t_awu;
+	param_t tecs_e_awu;
+	param_t v_cruise;
+	param_t v_arc;
 };
 
 /* Prototypes */
@@ -148,15 +182,26 @@ static int parameters_init(struct fw_pos_control_param_handles *h)
 	h->heading_p 		=	param_find("FW_HEAD_P");
 	h->headingr_p 		=	param_find("FW_HEADR_P");
 	h->headingr_i 		=	param_find("FW_HEADR_I");
-	h->headingr_awu 		=	param_find("FW_HEADR_AWU");
+	h->headingr_awu 	=	param_find("FW_HEADR_AWU");
 	h->headingr_lim 	=	param_find("FW_HEADR_LIM");
 	h->xtrack_p 		=	param_find("FW_XTRACK_P");
 	h->xtrack_d 		=	param_find("FW_XTRACK_D");
 	h->xtrack_i 		=	param_find("FW_XTRACK_I");
 	h->xtrack_awu 		=	param_find("FW_XTRACK_AWU");
 	h->altitude_p 		=	param_find("FW_ALT_P");
+	h->flight_path_lim 	=	param_find("FW_FPA_LIM");
 	h->roll_lim 		=	param_find("FW_ROLL_LIM");
 	h->pitch_lim 		=	param_find("FW_PITCH_LIM");
+	h->speed_p 			=   param_find("FW_SPEED_P");
+	h->acceleration_lim =   param_find("FW_ACC_LIM");
+	h->tecs_ktp			= 	param_find("FW_TECS_TP");
+	h->tecs_kti			= 	param_find("FW_TECS_TI");
+	h->tecs_kep			= 	param_find("FW_TECS_EP");
+	h->tecs_kei			= 	param_find("FW_TECS_EI");
+	h->tecs_t_awu		= 	param_find("FW_TECS_T_AWU");
+	h->tecs_e_awu		= 	param_find("FW_TECS_E_AWU");
+	h->v_cruise			=	param_find("FW_V_CRUISE");
+	h->v_arc			=	param_find("FW_V_ARC");
 
 	return OK;
 }
@@ -173,8 +218,19 @@ static int parameters_update(const struct fw_pos_control_param_handles *h, struc
 	param_get(h->xtrack_i, &(p->xtrack_i));
 	param_get(h->xtrack_awu, &(p->xtrack_awu));
 	param_get(h->altitude_p, &(p->altitude_p));
+	param_get(h->flight_path_lim, &(p->flight_path_lim));
 	param_get(h->roll_lim, &(p->roll_lim));
 	param_get(h->pitch_lim, &(p->pitch_lim));
+	param_get(h->speed_p, &(p->speed_p));
+	param_get(h->acceleration_lim, &(p->acceleration_lim));
+	param_get(h->tecs_ktp, &(p->tecs_ktp));
+	param_get(h->tecs_kti, &(p->tecs_kti));
+	param_get(h->tecs_kep, &(p->tecs_kep));
+	param_get(h->tecs_kei, &(p->tecs_kei));
+	param_get(h->tecs_t_awu, &(p->tecs_t_awu));
+	param_get(h->tecs_e_awu, &(p->tecs_e_awu));
+	param_get(h->v_cruise, &(p->v_cruise));
+	param_get(h->v_arc, &(p->v_arc));
 
 	return OK;
 }
@@ -256,7 +312,10 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		PID_t heading_rate_controller;
 		PID_t offtrack_controller;
 		PID_t altitude_controller;
+		PID_t speed_controller;
+		TECS_t total_energy_controller;
 
+		//xxx: some of these should be params
 		const float delta_psi_c_norm_c = 60.0f*M_DEG_TO_RAD_F;
 		const float delta_psi_rate_c_norm_c = M_PI_F;
 		const float alt_norm_c = 2000;
@@ -265,15 +324,20 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		const float psi_rate_e_scaled_norm_c = M_PI_F;
 		const float roll_norm_c = M_PI_F;
 		const float pitch_norm_c = M_PI_2_F;
+		const float flight_path_angle_norm_c = M_PI_2_F;
+		const float accelereation_norm_c = 3.0f;
+		const float speed_norm_c = 40.0f;
 
 		parameters_init(&h);
 		parameters_update(&h, &p);
 		pid_init(&heading_controller, p.heading_p, 0.0f, 0.0f, 0.0f, p.headingr_lim/delta_psi_rate_c_norm_c, PID_MODE_DERIVATIV_NONE);
 		pid_init(&heading_rate_controller, p.headingr_p, p.headingr_i, 0.0f, p.headingr_awu, p.roll_lim/roll_norm_c, PID_MODE_DERIVATIV_NONE);
-		pid_init(&altitude_controller, p.altitude_p, 0.0f, 0.0f, 0.0f, p.pitch_lim/pitch_norm_c, PID_MODE_DERIVATIV_NONE);
+		pid_init(&altitude_controller, p.altitude_p, 0.0f, 0.0f, 0.0f, p.flight_path_lim/flight_path_angle_norm_c, PID_MODE_DERIVATIV_NONE);
+		pid_init(&speed_controller, p.speed_p, 0.0f, 0.0f, 0.0f, p.acceleration_lim/accelereation_norm_c, PID_MODE_DERIVATIV_NONE);
 		pid_init(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu , 1.0f, PID_MODE_DERIVATIV_CALC); //TODO: remove hardcoded value
+		tecs_init(&total_energy_controller, p.tecs_ktp, p.tecs_kti, p.tecs_kep, p.tecs_kei, p.tecs_t_awu, p.tecs_e_awu, 1.0f, p.pitch_lim/pitch_norm_c);
 
-		float r_min = fabs(30.0f*30.0f/(9.81*tanf(p.roll_lim))) +10; //V^2/(9.81*tan(roll_max) //XXX: remove hardcoded value
+		float r_min = fabs((p.v_arc + 6.0f) *  (p.v_arc + 6.0f) /(9.81*tanf(p.roll_lim))); //V^2/(9.81*tan(roll_max) +  margin
 
 		/* Horizontal Navigation State */
 		typedef enum {
@@ -297,8 +361,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		/* advertise debug values */
 		struct debug_key_value_s dbg_xte = { .key = "xte", .value = 0.0f };
 		orb_advert_t pub_dbg_xte = orb_advertise(ORB_ID(debug_key_value), &dbg_xte);
-		struct debug_key_value_s dbg_delta_psi_c = { .key = "dpc", .value = 0.0f };
-		orb_advert_t pub_dbg_delta_psi_c = orb_advertise(ORB_ID(debug_key_value), &dbg_delta_psi_c);
+//		struct debug_key_value_s dbg_delta_psi_c = { .key = "dpc", .value = 0.0f };
+//		orb_advert_t pub_dbg_delta_psi_c = orb_advertise(ORB_ID(debug_key_value), &dbg_delta_psi_c);
 
 		while(!thread_should_exit)
 		{
@@ -327,9 +391,11 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 					parameters_update(&h, &p);
 					pid_set_parameters(&heading_controller, p.heading_p, 0, 0, 0, p.headingr_lim/delta_psi_rate_c_norm_c); //arbitrary high limit
 					pid_set_parameters(&heading_rate_controller, p.headingr_p, p.headingr_i, 0, p.headingr_awu, p.roll_lim/roll_norm_c);
-					pid_set_parameters(&altitude_controller, p.altitude_p, 0, 0, 0, p.pitch_lim/pitch_norm_c);
+					pid_set_parameters(&altitude_controller, p.altitude_p, 0, 0, 0, p.flight_path_lim/flight_path_angle_norm_c);
+					pid_set_parameters(&speed_controller, p.speed_p, 0, 0, 0, p.acceleration_lim/accelereation_norm_c);
 					pid_set_parameters(&offtrack_controller, p.xtrack_p, p.xtrack_i, p.xtrack_d, p.xtrack_awu, 1.0f);
-					r_min = fabs(30.0f*30.0f/(9.81*tanf(p.roll_lim))) + 10.0f; //V^2/(9.81*tan(roll_max) + margin //XXX: remove hardcoded value
+					tecs_set_parameters(&total_energy_controller, p.tecs_ktp, p.tecs_kti, p.tecs_kep, p.tecs_kei, p.tecs_t_awu, p.tecs_e_awu, 1.0f, p.pitch_lim/pitch_norm_c);
+					r_min = fabs((p.v_arc + 6.0f) *  (p.v_arc + 6.0f) /(9.81*tanf(p.roll_lim))); //V^2/(9.81*tan(roll_max) +  margin
 
 				}
 
@@ -606,17 +672,48 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 						/* END HORIZONTAL CONTROL */
 
-						/* Very simple Altitude Control */
+						/* Speed and altitude control */
 						if(pos_updated)
 						{
 
 							//TODO: take care of relative vs. ab. altitude
-							attitude_setpoint.pitch_body = pitch_norm_c * pid_calculate(&altitude_controller, current_navigation_setpoint.altitude/alt_norm_c, global_pos.alt/alt_norm_c, 0.0f, 0.0f);
+							float flight_path_angle_sp = flight_path_angle_norm_c * pid_calculate(&altitude_controller, current_navigation_setpoint.altitude/alt_norm_c, global_pos.alt/alt_norm_c, 0.0f, 0.0f);
+
+							float speed_sp = p.v_cruise;
+							if (horizontal_navigation_state == HNAV_ARC) {
+								speed_sp = p.v_arc;
+							}
+
+							static float airspeed_previous = 0.0f;
+							float airspeed = sqrtf(global_pos.vx * global_pos.vx + global_pos.vy * global_pos.vy + global_pos.vz * global_pos.vz); //xxx: use airspeed
+							float acc_sp = accelereation_norm_c * pid_calculate(&speed_controller, speed_sp/speed_norm_c, airspeed/speed_norm_c, 0.0f, 0.0f);
+							printf("acc_sp: %.4f, speed_sp/speed_norm_c: %.4f, airspeed/speed_norm_c: %.4f\n", (double)acc_sp, (double)speed_sp/speed_norm_c, (double)airspeed/speed_norm_c);
+
+							/* Total Energy Control */
+							float flight_path_angle;
+							if(fabs(airspeed) > 0) {
+								flight_path_angle = -asinf(global_pos.vz / airspeed);
+							} else {
+								flight_path_angle = 0.0f;;
+							}
+							printf("airspeed: %.4f, airspeed_previous: %.4f\n", (double)airspeed, (double)airspeed_previous);
+							float acceleration = (airspeed - airspeed_previous) / deltaT / 9.81f;
+							airspeed_previous = airspeed;
+							tecs_calculate(&total_energy_controller, &(attitude_setpoint.thrust), &(attitude_setpoint.pitch_body), flight_path_angle_sp/flight_path_angle_norm_c, flight_path_angle/flight_path_angle_norm_c, acc_sp/accelereation_norm_c, acceleration/accelereation_norm_c, deltaT);
+
+							/* Limit the thrust to positive value */
+							if (attitude_setpoint.thrust < 0.0f) {
+								attitude_setpoint.thrust = 0.0f;
+							}
+
+							printf("attitude_setpoint.thrust: %.4f, p.tecs_ktp %.4f\n**********\n", attitude_setpoint.thrust, p.tecs_ktp);
+
+							attitude_setpoint.pitch_body = attitude_setpoint.pitch_body * pitch_norm_c;
+
+
 
 						}
 
-						// XXX need speed control
-						attitude_setpoint.thrust = 0.7f;
 
 						/* publish the attitude setpoint */
 						orb_publish(ORB_ID(vehicle_attitude_setpoint), attitude_setpoint_pub, &attitude_setpoint);
