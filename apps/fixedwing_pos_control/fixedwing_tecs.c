@@ -85,19 +85,19 @@ int tecs_calculate(TECS_t * tecs, float * thrust_sp, float * pitch_sp,
 		float acceleration_sp, float acceleration,
 		float dt)
 {
-	printf("flight_path_angle_sp %.4f, flight_path_angle %.4f, acceleration_sp %.4f, acceleration: %.4f \n", (double)flight_path_angle_sp, (double) flight_path_angle, (double)acceleration_sp, (double)acceleration);
+//	printf("flight_path_angle_sp %.4f, flight_path_angle %.4f, acceleration_sp %.4f, acceleration: %.4f \n", (double)flight_path_angle_sp, (double) flight_path_angle, (double)acceleration_sp, (double)acceleration);
 
 	float flight_path_angle_error = flight_path_angle_sp - flight_path_angle;
 	float acceleration_error = acceleration_sp - acceleration;
 
-	printf("flight_path_angle_error: %.4f, acceleration_error: %.4f\n", flight_path_angle_error, acceleration_error);
+//	printf("flight_path_angle_error: %.4f, acceleration_error: %.4f\n", flight_path_angle_error, acceleration_error);
 
 	float specific_total_energy_rate_error = flight_path_angle_error + acceleration_error;
 	float specific_total_energy_rate = -flight_path_angle - acceleration;
 	float specific_energy_distribution_rate = flight_path_angle - acceleration;
 	float specific_energy_distribution_rate_error = -flight_path_angle_error + acceleration_error;
 
-	printf("specific_total_energy_rate_error: %.4f, specific_total_energy_rate: %.4f\nspecific_energy_distribution_rate: %.4f, specific_energy_distribution_rate_error: %.4f\n", specific_total_energy_rate_error, specific_total_energy_rate, specific_energy_distribution_rate, specific_energy_distribution_rate_error);
+//	printf("specific_total_energy_rate_error: %.4f, specific_total_energy_rate: %.4f\nspecific_energy_distribution_rate: %.4f, specific_energy_distribution_rate_error: %.4f\n", specific_total_energy_rate_error, specific_total_energy_rate, specific_energy_distribution_rate, specific_energy_distribution_rate_error);
 
 	/* Thrust */
 	float i = tecs->integral_t + (specific_total_energy_rate_error * dt);
@@ -113,7 +113,7 @@ int tecs_calculate(TECS_t * tecs, float * thrust_sp, float * pitch_sp,
 		tecs->integral_t = i;
 	}
 
-	printf("tecs->integral_t %.4f\n", tecs->integral_t);
+//	printf("tecs->integral_t %.4f\n", tecs->integral_t);
 
 //	printf("tecs->ktp: %.4f, tecs->kti: %.4f, tecs->limit_t: %.4f\n", (double)tecs->ktp, (double)tecs->kti, (double)tecs->limit_t);
 	float output = specific_total_energy_rate * tecs->ktp + i * tecs->kti;
@@ -144,7 +144,7 @@ int tecs_calculate(TECS_t * tecs, float * thrust_sp, float * pitch_sp,
 		tecs->integral_e = i;
 	}
 
-	printf("tecs->integral_e %.4f\n", tecs->integral_e);
+//	printf("tecs->integral_e %.4f\n", tecs->integral_e);
 
 	output = -(specific_energy_distribution_rate * tecs->kep + i * tecs->kei); // additional -, because of definition of elevator deflection
 

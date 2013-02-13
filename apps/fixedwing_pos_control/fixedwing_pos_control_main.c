@@ -470,7 +470,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 					}
 
-					/* Simple Horizontal Control (very simple path planning) */
+					/* Simple Horizontal Control (very simple path planning) */ //xxx: cleanup if-structure, state machine
 					if(global_sp_updated_set_once)
 					{
 		//				if (counter % 100 == 0)
@@ -522,16 +522,32 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 										psi_track = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
 																									(double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
+//										printf("psi_track = %.4f\n", (double)psi_track);
 										wp_reached = false;
 
-									}
-									else
-									{
+									} else	{
 										/*past the setpoint but missed it, have no valid arcs --> try to turn back to the setpoint */
+//										//some debug output:
+//										float bearing_end = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d, (double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
+//										float bearing_track = get_bearing_to_next_waypoint((double)start_pos.lat / (double)1e7d, (double)start_pos.lon / (double)1e7d, (double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
+//										float bearing_diff = bearing_track - bearing_end;
+//										bearing_diff = _wrap_pi(bearing_diff);
+//										printf("1)\nbearing_end: %.4f, bearing_track: %.4f, bearing_diff: %.4f\n", bearing_end, bearing_track, bearing_diff);
+
+
 										start_pos = global_pos;
 										psi_track = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
 														(double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
-										printf("Missed wp, new try (line mode, no valid arc)\n");
+										psi_track = _wrap_pi(psi_track);
+//										printf("2)\n");
+										printf("Missed wp, new try (line mode, no valid arc), psi_track: %.4f\n", (double)psi_track);
+
+//										//some debug output:
+//										bearing_end = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d, (double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
+//										bearing_track = get_bearing_to_next_waypoint((double)start_pos.lat / (double)1e7d, (double)start_pos.lon / (double)1e7d, (double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
+//										bearing_diff = bearing_track - bearing_end;
+//										bearing_diff = _wrap_pi(bearing_diff);
+//										printf("bearing_end: %.4f, bearing_track: %.4f, bearing_diff: %.4f\n", bearing_end, bearing_track, bearing_diff);
 
 
 									}
@@ -545,7 +561,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 									start_pos = global_pos;
 									psi_track = get_bearing_to_next_waypoint((double)global_pos.lat / (double)1e7d, (double)global_pos.lon / (double)1e7d,
 											(double)current_navigation_setpoint.lat / (double)1e7d, (double)current_navigation_setpoint.lon / (double)1e7d);
-									printf("Missed wp, new try (line mode)\n");
+									psi_track = _wrap_pi(psi_track);
+									printf("Missed wp, new try (line mode), psi_track: %.4f\n", (double)psi_track);
 
 								}
 							}
@@ -593,6 +610,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 						dbg_xte.value = xtrack_err.distance;
 						orb_publish(ORB_ID(debug_key_value), pub_dbg_xte, &dbg_xte);
+
+						/* End of path planning, start of actual control */
 
 						if(distance_res == OK) {
 //							if (counter % 10 == 0) {
@@ -687,7 +706,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 							static float airspeed_previous = 0.0f;
 							float airspeed = sqrtf(global_pos.vx * global_pos.vx + global_pos.vy * global_pos.vy + global_pos.vz * global_pos.vz); //xxx: use airspeed
 							float acc_sp = accelereation_norm_c * pid_calculate(&speed_controller, speed_sp/speed_norm_c, airspeed/speed_norm_c, 0.0f, 0.0f);
-							printf("acc_sp: %.4f, speed_sp/speed_norm_c: %.4f, airspeed/speed_norm_c: %.4f\n", (double)acc_sp, (double)speed_sp/speed_norm_c, (double)airspeed/speed_norm_c);
+							//printf("acc_sp: %.4f, speed_sp/speed_norm_c: %.4f, airspeed/speed_norm_c: %.4f\n", (double)acc_sp, (double)speed_sp/speed_norm_c, (double)airspeed/speed_norm_c);
 
 							/* Total Energy Control */
 							float flight_path_angle;
@@ -696,7 +715,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 							} else {
 								flight_path_angle = 0.0f;;
 							}
-							printf("airspeed: %.4f, airspeed_previous: %.4f\n", (double)airspeed, (double)airspeed_previous);
+//							printf("airspeed: %.4f, airspeed_previous: %.4f\n", (double)airspeed, (double)airspeed_previous);
 							float acceleration = (airspeed - airspeed_previous) / deltaT / 9.81f;
 							airspeed_previous = airspeed;
 							tecs_calculate(&total_energy_controller, &(attitude_setpoint.thrust), &(attitude_setpoint.pitch_body), flight_path_angle_sp/flight_path_angle_norm_c, flight_path_angle/flight_path_angle_norm_c, acc_sp/accelereation_norm_c, acceleration/accelereation_norm_c, deltaT);
@@ -706,7 +725,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 								attitude_setpoint.thrust = 0.0f;
 							}
 
-							printf("attitude_setpoint.thrust: %.4f, p.tecs_ktp %.4f\n**********\n", attitude_setpoint.thrust, p.tecs_ktp);
+//							printf("attitude_setpoint.thrust: %.4f, p.tecs_ktp %.4f\n**********\n", attitude_setpoint.thrust, p.tecs_ktp);
 
 							attitude_setpoint.pitch_body = attitude_setpoint.pitch_body * pitch_norm_c;
 
