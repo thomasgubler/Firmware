@@ -51,7 +51,6 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdbool.h>
-#include <mavlink/mavlink_log.h>
 
 
 /* values for map projection */
@@ -272,7 +271,7 @@ __EXPORT int get_distance_to_line(struct crosstrack_error_s * crosstrack_error, 
 
 //XXX: this function is now specific to fw navigation, should be moved out of geo
 __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, double lat_now, double lon_now, double lat_center, double lon_center,
-		float radius, float arc_start_bearing, float arc_sweep, bool wp_reached)
+		float radius, float arc_start_bearing, float arc_sweep)
 {
 	// This function returns the distance to the nearest point on the track arc.  Distance is positive if current
 	// position is right of the arc and negative if left of the arc as seen from the closest point on the arc and
@@ -305,15 +304,6 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 		bearing_sector_end =_wrap_2pi(arc_start_bearing + arc_sweep);
 //		printf("[deg] bearing_sector_start: %0.4f, bearing_sector_end: %0.4f\n", (double)bearing_sector_start*180.0/M_PI, (double)bearing_sector_end*180.0/M_PI);
 
-//		if (bearing_sector_end > 2.0f * M_PI_F) bearing_sector_end -= M_TWOPI_F;
-//
-//	} else {
-//		bearing_sector_end = arc_start_bearing;
-//		bearing_sector_start = arc_start_bearing - arc_sweep;
-//
-//		if (bearing_sector_start < 0.0f) bearing_sector_start += M_TWOPI_F;
-//	}
-
 	in_sector = false;
 
 	if ( arc_sweep  >= 0 ) {
@@ -333,104 +323,24 @@ __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, d
 
 	}
 
-//	// Case where sector does not span zero
-//	if (bearing_sector_end >= bearing_sector_start && bearing_now >= bearing_sector_start && bearing_now <= bearing_sector_end) {
-//			in_sector = true;
-//
-//	}
-//
-//	// Case where sector does span zero
-//	if (bearing_sector_end < bearing_sector_start && (bearing_now > bearing_sector_start || bearing_now < bearing_sector_end)){
-//			in_sector = true;
-//	}
-
-	// If in the sector then calculate distance and bearing to closest point
 	if (in_sector) {
-		if(counter % 100 == 0) {
-			if(wp_reached) {
-				printf("in sector, wp reached\n");
-			} else {
-				printf("in sector, wp NOT reached\n");
-			}
-
-		}
-
-
 		crosstrack_error->past_end = false;
-		float dist_to_center = fabs(get_distance_to_next_waypoint(lat_now, lon_now, lat_center, lon_center));
-
-		crosstrack_error->distance = radius - dist_to_center;
-		crosstrack_error->bearing = bearing_now + M_PI_2_F;
-
-		if (arc_sweep < 0) {
-			crosstrack_error->distance *= -1;
-			crosstrack_error->bearing -= M_PI_F;
-		}
-
-
-		// If out of the sector then calculate dist and bearing to start or end point
-
 	} else {
-
-		// Use the approximation  that 111,111 meters in the y direction is 1 degree (of latitude)
-		// and 111,111 * cos(latitude) meters in the x direction is 1 degree (of longitude) to
-		// calculate the position of the start and end points.  We should not be doing this often
-		// as this function generally will not be called repeatedly when we are out of the sector.
-
-		// TO DO - this is messed up and won't compile
-		float start_disp_x = radius * sin(arc_start_bearing);
-		float start_disp_y = radius * cos(arc_start_bearing);
-		float end_disp_x = radius * sin(_wrap_pi(arc_start_bearing + arc_sweep));
-		float end_disp_y = radius * cos(_wrap_pi(arc_start_bearing + arc_sweep));
-		float lon_start = lon_now + start_disp_x / 111111.0d;
-		float lat_start = lat_now + start_disp_y * cos(lat_now) / 111111.0d;
-		float lon_end = lon_now + end_disp_x / 111111.0d;
-		float lat_end = lat_now + end_disp_y * cos(lat_now) / 111111.0d;
-		float dist_to_start = get_distance_to_next_waypoint(lat_now, lon_now, lat_start, lon_start);
-		float dist_to_end = get_distance_to_next_waypoint(lat_now, lon_now, lat_end, lon_end);
-
-
-//		if (dist_to_start < dist_to_end) {
-//			printf("out of sector, near start\n");
-//			crosstrack_error->distance = dist_to_start;
-//			if (wp_reached) {
-//				crosstrack_error->past_end = true;
-//			}
-//			crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_start, lon_start);
-//
-//		} else {
-			if (wp_reached) {
-				printf("out of sector, wp reached\n");
-				crosstrack_error->past_end = true;
-				crosstrack_error->distance = dist_to_end;
-				crosstrack_error->bearing = get_bearing_to_next_waypoint(lat_now, lon_now, lat_end, lon_end);
-			} else { //try to reach the waypoint again
-
-				if(counter % 100 == 0) {
-					printf("out of sector, wp not yet reached, new try\n");
-					int mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
-					mavlink_log_info(mavlink_fd, "FW POS CONTROL: missed wp, new try");
-					close(mavlink_fd);
-				}
-
-				float dist_to_center = fabs(get_distance_to_next_waypoint(lat_now, lon_now, lat_center, lon_center));
-				crosstrack_error->distance = radius - dist_to_center;
-				crosstrack_error->bearing = bearing_now + M_PI_2_F;
-
-				if (arc_sweep < 0) {
-					crosstrack_error->distance *= -1;
-					crosstrack_error->bearing -= M_PI_F;
-				}
-
-
-			}
-
-//		}
-
-
-
-
+		crosstrack_error->past_end = true;
 	}
+
+	/* Calculate distance and bearing of nearest point on arc */
+
+	float dist_to_center = fabs(get_distance_to_next_waypoint(lat_now, lon_now, lat_center, lon_center));
+
+	crosstrack_error->distance = radius - dist_to_center;
+	crosstrack_error->bearing = bearing_now + M_PI_2_F;
+
+	if (arc_sweep < 0) {
+		crosstrack_error->distance *= -1;
+		crosstrack_error->bearing -= M_PI_F;
+	}
+
 
 	counter++;
 

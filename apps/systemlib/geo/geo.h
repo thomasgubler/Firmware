@@ -111,7 +111,7 @@ __EXPORT int get_distance_to_line(struct crosstrack_error_s * crosstrack_error, 
 
 //XXX: this function is now specific to fw navigation, should be moved out of geo
 __EXPORT int get_distance_to_arc(struct crosstrack_error_s * crosstrack_error, double lat_now, double lon_now, double lat_center, double lon_center,
-		float radius, float arc_start_bearing, float arc_sweep, bool wp_reached);
+		float radius, float arc_start_bearing, float arc_sweep);
 
 __EXPORT float _wrap_180(float bearing);
 __EXPORT float _wrap_360(float bearing);
