@@ -216,7 +216,6 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 	actuators->control[1] = airspeed_square_inv_scaled * temp;
 	//TODO XXX the feedforward below is dangerous, as soon as the throttle/elevator MIMO controller is ready this has to be removed
 	/* set pitch minus feedforward throttle compensation (nose pitches up from throttle */
-	actuators->control[1] += (-1.0f) * p.pitch_thr_ff * rate_sp->thrust;
 
 	//printf("rate_sp_norm[1]: %.4f, rates_norm[1]: %.4f, actuators->control[1] %.4f,  actuators->control[1] (pure) p %.4f, airspeed_square_inv_scaled %.4f\n", (double)rate_sp_norm[1], (double)rates_norm[1], (double)actuators->control[1], (double)temp, (double)airspeed_square_inv_scaled);
 
