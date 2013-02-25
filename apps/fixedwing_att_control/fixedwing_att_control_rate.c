@@ -56,10 +56,12 @@
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_attitude_setpoint.h>
 #include <uORB/topics/manual_control_setpoint.h>
+#include <uORB/topics/differential_pressure.h>
 #include <systemlib/param/param.h>
 #include <systemlib/pid/pid.h>
 #include <systemlib/geo/geo.h>
 #include <systemlib/systemlib.h>
+#include <mavlink/mavlink_log.h>
 
 /*
  * Controller parameters, accessible via MAVLink
@@ -162,7 +164,9 @@ static int parameters_update(const struct fw_rate_control_param_handles *h, stru
 int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 		const float rates[],
 		const float speed_body[],
-		struct actuator_controls_s *actuators)
+		struct actuator_controls_s *actuators,
+		const struct differential_pressure_s *differential_pressure,
+		const struct vehicle_status_s *vehicle_status)
 {
 	static int counter = 0;
 	static bool initialized = false;
@@ -204,7 +208,18 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 
 	//TODO for the moment we use groundspeed here instead of the true airspeed
 	float airspeed_square_inv_scaled;
-	float airspeed_square = fabs(speed_body[0] * speed_body[0] + speed_body[1] * speed_body[1] + speed_body[2] * speed_body[2]);
+	float airspeed_square = 0.0f;
+	if(vehicle_status->flag_airspeed_valid && !vehicle_status->flag_hil_enabled) { //XXX: in HIL groundspeed is used
+		airspeed_square = differential_pressure->true_airspeed_m_s * differential_pressure->true_airspeed_m_s;
+	} else {
+		airspeed_square = fabs(speed_body[0] * speed_body[0] + speed_body[1] * speed_body[1] + speed_body[2] * speed_body[2]); //use ground speed
+		if(!vehicle_status->flag_hil_enabled && counter % 50 == 0) {
+			int mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+			printf("[FW Att Rate Ctrl]: Using groundspeed instead of airspeed\n");
+			mavlink_log_critical(mavlink_fd, "[FW Att Rate Ctrl]: invalid airspeed, using groundspeed");
+			close(mavlink_fd);
+		}
+	}
 	airspeed_square_inv_scaled = 22.0f * 22.0f / airspeed_square; //xxx: 22 = average speed
 
 
@@ -214,8 +229,6 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 	/* pitch rate (PI) */
 	float temp = pid_calculate(&pitch_rate_controller, rate_sp_norm[1], rates_norm[1], 0.0f, deltaT);
 	actuators->control[1] = airspeed_square_inv_scaled * temp;
-	//TODO XXX the feedforward below is dangerous, as soon as the throttle/elevator MIMO controller is ready this has to be removed
-	/* set pitch minus feedforward throttle compensation (nose pitches up from throttle */
 
 	//printf("rate_sp_norm[1]: %.4f, rates_norm[1]: %.4f, actuators->control[1] %.4f,  actuators->control[1] (pure) p %.4f, airspeed_square_inv_scaled %.4f\n", (double)rate_sp_norm[1], (double)rates_norm[1], (double)actuators->control[1], (double)temp, (double)airspeed_square_inv_scaled);
 

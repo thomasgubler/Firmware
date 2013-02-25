@@ -40,10 +40,14 @@
 
 #include <uORB/topics/vehicle_rates_setpoint.h>
 #include <uORB/topics/actuator_controls.h>
+#include <uORB/topics/differential_pressure.h>
+#include <uORB/topics/vehicle_status.h>
 
 int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 		const float rates[],
 		const float speed_body[],
-		struct actuator_controls_s *actuators);
+		struct actuator_controls_s *actuators,
+		const struct differential_pressure_s *differential_pressure,
+		const struct vehicle_status_s *vehicle_status);
 
 #endif /* FIXEDWING_ATT_CONTROL_RATE_H_ */

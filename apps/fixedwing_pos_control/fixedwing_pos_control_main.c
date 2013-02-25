@@ -59,6 +59,7 @@
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/vehicle_status.h>
+#include <uORB/topics/differential_pressure.h>
 #include <systemlib/param/param.h>
 #include <systemlib/pid/pid.h>
 #include <systemlib/geo/geo.h>
@@ -271,6 +272,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		memset(&param_update, 0, sizeof(param_update));
 		struct vehicle_status_s vehicle_status;
 		memset(&vehicle_status, 0, sizeof(vehicle_status));
+		struct differential_pressure_s differential_pressure;
+		memset(&differential_pressure, 0, sizeof(differential_pressure));
 
 		/* output structs */
 		struct vehicle_attitude_setpoint_s attitude_setpoint;
@@ -289,6 +292,7 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		int att_sub = orb_subscribe(ORB_ID(vehicle_attitude));
 		int param_sub = orb_subscribe(ORB_ID(parameter_update));
 		int vehicle_status_sub = orb_subscribe(ORB_ID(vehicle_status));
+		int differential_pressure_sub = orb_subscribe(ORB_ID(differential_pressure));
 
 		/* Setup of loop */
 		struct pollfd fds[2] = {
@@ -410,7 +414,15 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 					/* update vehicle status if necessary */
 					bool vehicle_status_updated;
 					orb_check(vehicle_status_sub, &vehicle_status_updated);
-					orb_copy(ORB_ID(vehicle_status), vehicle_status_sub, &vehicle_status);
+					if (vehicle_status_updated) {
+						orb_copy(ORB_ID(vehicle_status), vehicle_status_sub, &vehicle_status);
+					}
+
+					bool differential_pressure_updated;
+					orb_check(differential_pressure_sub, &differential_pressure_updated);
+					if (differential_pressure_updated) {
+						orb_copy(ORB_ID(differential_pressure), differential_pressure_sub, &differential_pressure);
+					}
 
 					/* load local copies */
 					orb_copy(ORB_ID(vehicle_attitude), att_sub, &att);
@@ -632,7 +644,19 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 							}
 
 							static float airspeed_previous = 0.0f;
-							float airspeed = sqrtf(global_pos.vx * global_pos.vx + global_pos.vy * global_pos.vy + global_pos.vz * global_pos.vz); //xxx: use airspeed
+							float airspeed = 0.0f;
+							if(vehicle_status.flag_airspeed_valid && !vehicle_status.flag_hil_enabled) { //XXX: in HIL groundspeed is used
+								airspeed = differential_pressure.true_airspeed_m_s;
+							} else {
+									airspeed = sqrtf(global_pos.vx * global_pos.vx + global_pos.vy * global_pos.vy + global_pos.vz * global_pos.vz); //use groundspeed								if(counter % 50 == 0) {
+									if(!vehicle_status.flag_hil_enabled && counter % 50 == 0) {
+										int mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+										printf("[FW Pos Ctrl]: Using groundspeed instead of airspeed\n");
+										mavlink_log_critical(mavlink_fd, "[FW Pos Ctrl]: invalid airspeed, using groundspeed");
+										close(mavlink_fd);
+									}
+								}
+
 							float acc_sp = accelereation_norm_c * pid_calculate(&speed_controller, speed_sp/speed_norm_c, airspeed/speed_norm_c, 0.0f, 0.0f);
 //							printf("acc_sp: %.4f, speed_sp/speed_norm_c: %.4f, airspeed/speed_norm_c: %.4f\n", (double)acc_sp, (double)speed_sp/speed_norm_c, (double)airspeed/speed_norm_c);
 

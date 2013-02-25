@@ -59,6 +59,7 @@
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/vehicle_rates_setpoint.h>
 #include <uORB/topics/vehicle_global_position.h>
+#include <uORB/topics/differential_pressure.h>
 #include <uORB/topics/debug_key_value.h>
 #include <systemlib/param/param.h>
 #include <systemlib/pid/pid.h>
@@ -117,6 +118,8 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 		memset(&manual_sp, 0, sizeof(manual_sp));
 		struct vehicle_status_s vstatus;
 		memset(&vstatus, 0, sizeof(vstatus));
+		struct differential_pressure_s differential_pressure;
+		memset(&differential_pressure, 0, sizeof(differential_pressure));
 
 		/* output structs */
 		struct actuator_controls_s actuators;
@@ -136,6 +139,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 		int global_pos_sub = orb_subscribe(ORB_ID(vehicle_global_position));
 		int manual_sp_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
 		int vstatus_sub = orb_subscribe(ORB_ID(vehicle_status));
+		int differential_pressure_sub = orb_subscribe(ORB_ID(differential_pressure));
 
 		/* Setup of loop */
 		float gyro[3] = {0.0f, 0.0f, 0.0f};
@@ -177,7 +181,18 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 			}
 
 			orb_copy(ORB_ID(manual_control_setpoint), manual_sp_sub, &manual_sp);
-			orb_copy(ORB_ID(vehicle_status), vstatus_sub, &vstatus);
+
+			bool vstatus_updated;
+			orb_check(vstatus_sub, &vstatus_updated);
+			if (vstatus_updated) {
+				orb_copy(ORB_ID(vehicle_status), vstatus_sub, &vstatus);
+			}
+
+			bool differential_pressure_updated;
+			orb_check(differential_pressure_sub, &differential_pressure_updated);
+			if (differential_pressure_updated) {
+				orb_copy(ORB_ID(differential_pressure), differential_pressure_sub, &differential_pressure);
+			}
 
 			gyro[0] = att.rollspeed;
 			gyro[1] = att.pitchspeed;
@@ -190,7 +205,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 				fixedwing_att_control_attitude(&att_sp, &att, speed_body, &rates_sp);
 
 				/* angular rate control */
-				fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators);
+				fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators, &differential_pressure, &vstatus);
 
 				/* pass through throttle */
 				actuators.control[3] = att_sp.thrust;
@@ -234,7 +249,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 					fixedwing_att_control_attitude(&att_sp, &att, speed_body, &rates_sp);
 
 					/* angular rate control */
-					fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators);
+					fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators, &differential_pressure, &vstatus);
 
 					/* pass through throttle */
 					rates_sp.thrust =  att_sp.thrust;
