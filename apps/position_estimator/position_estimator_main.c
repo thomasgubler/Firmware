@@ -60,6 +60,7 @@
 #include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/vehicle_local_position.h>
 #include <poll.h>
+#include <drivers/drv_hrt.h>
 
 #define N_STATES 6
 #define ERROR_COVARIANCE_INIT 3
@@ -302,41 +303,59 @@ int position_estimator_main(int argc, char *argv[])
 		.y = 0,
 		.z = 0
 	};
-	orb_advert_t local_pos_pub = orb_advertise(ORB_ID(vehicle_local_position), &local_pos);
+
+	struct vehicle_global_position_s global_pos;
+	memset(&global_pos, 0, sizeof(global_pos));
+//	orb_advert_t local_pos_pub = orb_advertise(ORB_ID(vehicle_local_position), &local_pos);
+	orb_advert_t global_pos_pub = orb_advertise(ORB_ID(vehicle_global_position), &global_pos);
 
 	printf("[multirotor position estimator] initialized projection with: lat: %.10f,  lon:%.10f\n", lat_current, lon_current);
+
+	//XXX: TEMPORARY HACK to pipe through the gps data to the global position data, needs to be reverted!
 
 	while (1) {
 
 		/*This runs at the rate of the sensors, if we have also a new gps update this is used in the position_estimator function */
-		struct pollfd fds[1] = { {.fd = vehicle_attitude_sub, .events = POLLIN} };
+		struct pollfd fds[1] = { {.fd = vehicle_gps_sub, .events = POLLIN} };
 
 		if (poll(fds, 1, 5000) <= 0) {
 			/* error / timeout */
 		} else {
 
-			orb_copy(ORB_ID(vehicle_attitude), vehicle_attitude_sub, &att);
+
+//			orb_copy(ORB_ID(vehicle_attitude), vehicle_attitude_sub, &att);
 			/* got attitude, updating pos as well */
 			orb_copy(ORB_ID(vehicle_gps_position), vehicle_gps_sub, &gps);
-			orb_copy(ORB_ID(vehicle_status), vehicle_status_sub, &vstatus);
+//			orb_copy(ORB_ID(vehicle_status), vehicle_status_sub, &vstatus);
+			global_pos.lat = gps.lat;
+			global_pos.lon = gps.lon;
+			global_pos.alt = (float)gps.alt*1e-3f;
+			global_pos.vx = gps.vel_n_m_s;
+			global_pos.vy = gps.vel_e_m_s;
+			global_pos.vz = gps.vel_d_m_s;
 
-			/*copy attitude */
-			u[0] = att.roll;
-			u[1] = att.pitch;
+			global_pos.time_gps_usec = gps.timestamp_position;
+			global_pos.timestamp = hrt_absolute_time();
 
-			/* initialize map projection with the last estimate (not at full rate) */
-			if (gps.fix_type > 2) {
-				/* Project gps lat lon (Geographic coordinate system) to plane*/
-				map_projection_project(((double)(gps.lat)) * 1e-7, ((double)(gps.lon)) * 1e-7, &(z[0]), &(z[1]));
+			orb_publish(ORB_ID(vehicle_global_position), global_pos_pub, &global_pos);
 
-				local_pos.x = z[0];
-				local_pos.y = z[1];
-				/* negative offset from initialization altitude */
-				local_pos.z = alt_current - (gps.alt) * 1e-3;
-
-
-				orb_publish(ORB_ID(vehicle_local_position), local_pos_pub, &local_pos);
-			}
+//			/*copy attitude */
+//			u[0] = att.roll;
+//			u[1] = att.pitch;
+//
+//			/* initialize map projection with the last estimate (not at full rate) */
+//			if (gps.fix_type > 2) {
+//				/* Project gps lat lon (Geographic coordinate system) to plane*/
+//				map_projection_project(((double)(gps.lat)) * 1e-7, ((double)(gps.lon)) * 1e-7, &(z[0]), &(z[1]));
+//
+//				local_pos.x = z[0];
+//				local_pos.y = z[1];
+//				/* negative offset from initialization altitude */
+//				local_pos.z = alt_current - (gps.alt) * 1e-3;
+//
+//
+//				orb_publish(ORB_ID(vehicle_local_position), local_pos_pub, &local_pos);
+//			}
 
 
 			// 	gps_covariance[0] = gps.eph; //TODO: needs scaling
