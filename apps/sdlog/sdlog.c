@@ -693,7 +693,8 @@ int sdlog_thread_main(int argc, char *argv[])
 					.flow = {buf.flow.flow_raw_x, buf.flow.flow_raw_y, buf.flow.flow_comp_x_m, buf.flow.flow_comp_y_m, buf.flow.ground_distance_m, buf.flow.quality},
 					.diff_pressure = buf.diff_pressure.differential_pressure_mbar,
 					.ind_airspeed = buf.diff_pressure.indicated_airspeed_m_s,
-					.true_airspeed = buf.diff_pressure.true_airspeed_m_s
+					.true_airspeed = buf.diff_pressure.true_airspeed_m_s,
+					.global_position = {(float)buf.global_pos.lat*1e-7f, (float)buf.global_pos.lon*1e-7f, buf.global_pos.alt, buf.global_pos.vx, buf.global_pos.vy, buf.global_pos.vz},
 				};
 
 				/* put into buffer for later IO */

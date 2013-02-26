@@ -67,6 +67,7 @@ struct sdlog_sysvector {
 	float diff_pressure;		/**< differential pressure */
 	float ind_airspeed;		/**< indicated airspeed */
 	float true_airspeed;		/**< true airspeed */
+	float global_position[6];   /**< lat, lon, alt, vn,ve vd */
 };
 #pragma pack(pop)
 

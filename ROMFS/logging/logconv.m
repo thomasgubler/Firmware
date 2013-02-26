@@ -43,6 +43,7 @@ end
 % float diff_pressure; - pressure difference in millibar
 % float ind_airspeed;
 % float true_airspeed;
+% float global_position[6] //lat, lon, alt, vn,ve vd
 
 % Definition of the logged values
 logFormat{1} = struct('name', 'timestamp',             'bytes', 8, 'array', 1, 'precision', 'uint64',  'machineformat', 'ieee-le.l64');
@@ -68,6 +69,7 @@ logFormat{20} = struct('name', 'optical_flow',         'bytes', 4, 'array', 6, '
 logFormat{21} = struct('name', 'diff_pressure',        'bytes', 4, 'array', 1, 'precision', 'float',   'machineformat', 'ieee-le');
 logFormat{22} = struct('name', 'ind_airspeed',         'bytes', 4, 'array', 1, 'precision', 'float',   'machineformat', 'ieee-le');
 logFormat{23} = struct('name', 'true_airspeed',        'bytes', 4, 'array', 1, 'precision', 'float',   'machineformat', 'ieee-le');
+logFormat{24} = struct('name', 'global_position',      'bytes', 4, 'array', 6, 'precision', 'float',   'machineformat', 'ieee-le');
 
 % First get length of one line
 columns = length(logFormat);
