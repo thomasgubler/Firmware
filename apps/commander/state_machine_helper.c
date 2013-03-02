@@ -603,10 +603,10 @@ void update_state_machine_mode_guided(int status_pub, struct vehicle_status_s *c
 
 void update_state_machine_mode_auto(int status_pub, struct vehicle_status_s *current_status, const int mavlink_fd)
 {
-	if (!current_status->flag_vector_flight_mode_ok) {
-		mavlink_log_critical(mavlink_fd, "NO POS LOCK, REJ. AUTO MODE");
-		return;
-	}
+//	if (!current_status->flag_vector_flight_mode_ok) {						xxx:temporary hack for testing
+//		mavlink_log_critical(mavlink_fd, "NO POS LOCK, REJ. AUTO MODE");
+//		return;
+//	}
 
 	if (current_status->state_machine == SYSTEM_STATE_GROUND_READY || current_status->state_machine == SYSTEM_STATE_MANUAL || current_status->state_machine == SYSTEM_STATE_STABILIZED) {
 		printf("[cmd] auto mode\n");

@@ -202,14 +202,19 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 			if (vstatus.state_machine == SYSTEM_STATE_AUTO ||
 				vstatus.state_machine == SYSTEM_STATE_STABILIZED) {
 				/* attitude control */
+				att_sp.pitch_body = 0.0f; //xxx: temporary hack for testing
+				att_sp.roll_body = 0.0f;  //xxx: temporary hack for testing
+				att_sp.yaw_body = 0.0f;   //xxx: temporary hack for testing
 				fixedwing_att_control_attitude(&att_sp, &att, speed_body, &rates_sp);
+				//printf("speed_body: %.4f, %.4f, %.4f\n", speed_body[0], speed_body[1], speed_body[2]);
+				//printf("rates_sp: %.4f, %.4f, %.4f\n", rates_sp.roll, rates_sp.pitch, rates_sp.yaw);
 
 				/* angular rate control */
 				fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators, &differential_pressure, &vstatus);
 
 				/* pass through throttle */
-				actuators.control[3] = att_sp.thrust;
-
+				actuators.control[3] = manual_sp.throttle;//att_sp.thrust; //xxx: temporary hack for testing
+				//printf("actuators.control: %.4f, %.4f, %.4f, %.4f\n", actuators.control[0], actuators.control[1], actuators.control[2], actuators.control[3]);
 				/* set flaps to zero */
 				actuators.control[4] = 0.0f;
 
@@ -278,6 +283,7 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 			}
 
 			/* publish rates */
+//			printf("att rates sp: roll %.4f, pitch %.4f, yaw %.4f\n", rates_sp.roll, rates_sp.pitch, rates_sp.yaw);
 			orb_publish(ORB_ID(vehicle_rates_setpoint), rates_pub, &rates_sp);
 
 			/* sanity check and publish actuator outputs */
