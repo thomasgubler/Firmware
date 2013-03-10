@@ -91,7 +91,7 @@ class PX4IO : public device::I2C
 {
 public:
 	PX4IO();
-	~PX4IO();
+	virtual ~PX4IO();
 
 	virtual int		init();
 
@@ -1023,7 +1023,7 @@ PX4IO::io_publish_pwm_outputs()
 
 	/* convert from register format to float */
 	for (unsigned i = 0; i < _max_actuators; i++)
-		outputs.output[i] = REG_TO_FLOAT(ctl[i]);
+		outputs.output[i] = ctl[i];
 	outputs.noutputs = _max_actuators;
 
 	/* lazily advertise on first publication */
