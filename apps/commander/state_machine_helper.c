@@ -545,7 +545,7 @@ void update_state_machine_mode_manual(int status_pub, struct vehicle_status_s *c
 	} else {
 
 		/* assuming a fixed wing, set to direct pass-through */
-		current_status->manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_DIRECT;
+		//current_status->manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_DIRECT; //xxx
 		current_status->flag_control_attitude_enabled = false;
 		current_status->flag_control_rates_enabled = false;
 	}

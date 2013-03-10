@@ -199,12 +199,10 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 			gyro[2] = att.yawspeed;
 
 			/* control */
-			if (vstatus.state_machine == SYSTEM_STATE_AUTO ||
-				vstatus.state_machine == SYSTEM_STATE_STABILIZED) {
+			if ((vstatus.state_machine == SYSTEM_STATE_AUTO ||
+				vstatus.state_machine == SYSTEM_STATE_STABILIZED) && vstatus.manual_control_mode != VEHICLE_MANUAL_CONTROL_MODE_SAS) { //xxx: hack
+
 				/* attitude control */
-				att_sp.pitch_body = 0.0f; //xxx: temporary hack for testing
-				att_sp.roll_body = 0.0f;  //xxx: temporary hack for testing
-				att_sp.yaw_body = 0.0f;   //xxx: temporary hack for testing
 				fixedwing_att_control_attitude(&att_sp, &att, speed_body, &rates_sp);
 				//printf("speed_body: %.4f, %.4f, %.4f\n", speed_body[0], speed_body[1], speed_body[2]);
 				//printf("rates_sp: %.4f, %.4f, %.4f\n", rates_sp.roll, rates_sp.pitch, rates_sp.yaw);
@@ -213,10 +211,66 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 				fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators, &differential_pressure, &vstatus);
 
 				/* pass through throttle */
-				actuators.control[3] = manual_sp.throttle;//att_sp.thrust; //xxx: temporary hack for testing
+				actuators.control[3] = att_sp.thrust;
 				//printf("actuators.control: %.4f, %.4f, %.4f, %.4f\n", actuators.control[0], actuators.control[1], actuators.control[2], actuators.control[3]);
 				/* set flaps to zero */
 				actuators.control[4] = 0.0f;
+
+			} else if ((vstatus.state_machine == SYSTEM_STATE_AUTO ||
+				vstatus.state_machine == SYSTEM_STATE_STABILIZED) && vstatus.manual_control_mode == VEHICLE_MANUAL_CONTROL_MODE_SAS) { //xxx: hack
+
+				//xxx: start removeme (setting sas as option of auto)
+
+				/* if the RC signal is lost, try to stay level and go slowly back down to ground */
+				if (vstatus.rc_signal_lost) {
+
+					/* put plane into loiter */
+					att_sp.roll_body = 0.3f;
+					att_sp.pitch_body = 0.0f;
+
+					/* limit throttle to 60 % of last value if sane */
+					if (isfinite(manual_sp.throttle) &&
+						(manual_sp.throttle >= 0.0f) &&
+						(manual_sp.throttle <= 1.0f)) {
+						att_sp.thrust = 0.6f * manual_sp.throttle;
+					} else {
+						att_sp.thrust = 0.0f;
+					}
+					att_sp.yaw_body = 0;
+
+					// XXX disable yaw control, loiter
+
+				} else {
+
+					att_sp.roll_body = manual_sp.roll;
+					att_sp.pitch_body = manual_sp.pitch;
+					att_sp.yaw_body = manual_sp.yaw;
+					att_sp.thrust = manual_sp.throttle;
+				}
+
+				att_sp.timestamp = hrt_absolute_time();
+
+				/* attitude control */
+				fixedwing_att_control_attitude(&att_sp, &att, speed_body, &rates_sp);
+
+				/* angular rate control */
+				fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators, &differential_pressure, &vstatus);
+
+				/* pass through throttle */
+				rates_sp.thrust =  att_sp.thrust;
+				actuators.control[3] = att_sp.thrust;
+
+				/* pass through flaps */
+				if (isfinite(manual_sp.flaps)) {
+					actuators.control[4] = manual_sp.flaps;
+				} else {
+					actuators.control[4] = 0.0f;
+				}
+
+
+
+				//xxx: end removeme
+
 
 			} else if (vstatus.state_machine == SYSTEM_STATE_MANUAL) {
 				if (vstatus.manual_control_mode == VEHICLE_MANUAL_CONTROL_MODE_SAS) {
@@ -268,16 +322,50 @@ int fixedwing_att_control_thread_main(int argc, char *argv[])
 					}
 
 				} else if (vstatus.manual_control_mode == VEHICLE_MANUAL_CONTROL_MODE_DIRECT) {
-					/* directly pass through values */
-					actuators.control[0] = manual_sp.roll;
-					/* positive pitch means negative actuator -> pull up */
-					actuators.control[1] = manual_sp.pitch;
-					actuators.control[2] = manual_sp.yaw;
-					actuators.control[3] = manual_sp.throttle;
-					if (isfinite(manual_sp.flaps)) {
-						actuators.control[4] = manual_sp.flaps;
+
+					/* if the RC signal is lost, try to stay level and go slowly back down to ground */
+					if (vstatus.rc_signal_lost) {
+
+						/* put plane into loiter */
+						att_sp.roll_body = 0.3f;
+						att_sp.pitch_body = 0.0f;
+
+						/* limit throttle to 60 % of last value if sane */
+						if (isfinite(manual_sp.throttle) &&
+							(manual_sp.throttle >= 0.0f) &&
+							(manual_sp.throttle <= 1.0f)) {
+							att_sp.thrust = 0.6f * manual_sp.throttle;
+						} else {
+							att_sp.thrust = 0.0f;
+						}
+						att_sp.yaw_body = 0;
+
+						// XXX disable yaw control, loiter
+
+						/* attitude control */
+						fixedwing_att_control_attitude(&att_sp, &att, speed_body, &rates_sp);
+
+						/* angular rate control */
+						fixedwing_att_control_rates(&rates_sp, gyro, speed_body, &actuators, &differential_pressure, &vstatus);
+
+						/* pass through throttle */
+						rates_sp.thrust =  att_sp.thrust;
+						actuators.control[3] = att_sp.thrust;
+
 					} else {
-						actuators.control[4] = 0.0f;
+
+						/* directly pass through values */
+						actuators.control[0] = manual_sp.roll;
+						/* positive pitch means negative actuator -> pull up */
+						actuators.control[1] = manual_sp.pitch;
+						actuators.control[2] = manual_sp.yaw;
+						actuators.control[3] = manual_sp.throttle;
+						if (isfinite(manual_sp.flaps)) {
+							actuators.control[4] = manual_sp.flaps;
+						} else {
+							actuators.control[4] = 0.0f;
+						}
+
 					}
 				}
 			}

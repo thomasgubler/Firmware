@@ -1981,6 +1981,8 @@ int commander_thread_main(int argc, char *argv[])
 					/* enable manual override */
 					update_state_machine_mode_manual(stat_pub, &current_status, mavlink_fd);
 
+
+
 				} else if (sp_man.manual_override_switch < -STICK_ON_OFF_LIMIT) {
 					// /* check auto mode switch for correct mode */
 					// if (sp_man.auto_mode_switch > STICK_ON_OFF_LIMIT) {
@@ -1989,6 +1991,15 @@ int commander_thread_main(int argc, char *argv[])
 
 					// } else if (sp_man.auto_mode_switch < -STICK_ON_OFF_LIMIT) {
 						// XXX hardcode to auto for now
+
+					//xxx removeme todo
+					if(sp_man.auto_mode_switch > STICK_ON_OFF_LIMIT) { //xxx: hack until we have the new mode switching
+						current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_SAS;
+					} else
+					{
+						current_status.manual_control_mode = VEHICLE_MANUAL_CONTROL_MODE_DIRECT;
+					}
+
 						update_state_machine_mode_auto(stat_pub, &current_status, mavlink_fd);
 
 					// }

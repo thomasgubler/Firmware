@@ -219,6 +219,9 @@ mixer_callback(uintptr_t handle,
 	case MIX_OVERRIDE:
 		if (r_page_rc_input[PX4IO_P_RC_VALID] & (1 << control_index)) {
 			control = REG_TO_FLOAT(r_page_rc_input[PX4IO_P_RC_BASE + control_index]);
+			if(1==control_index) { //xxx: hack, move this to  a better location
+				control *= -1.0f;
+			}
 			break;
 		}
 		return -1;

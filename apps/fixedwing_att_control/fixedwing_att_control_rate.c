@@ -220,6 +220,11 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 			close(mavlink_fd);
 		}
 	}
+
+	if(airspeed_square < 100.0f) { //for safety in case of sensor failure
+		airspeed_square = 100.0f;
+	}
+
 	airspeed_square_inv_scaled = 22.0f * 22.0f / airspeed_square; //xxx: 22 = average speed
 
 
@@ -227,8 +232,7 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 	actuators->control[0] = airspeed_square_inv_scaled * pid_calculate(&roll_rate_controller, rate_sp_norm[0], rates_norm[0], 0.0f, deltaT)
 			;
 	/* pitch rate (PI) */
-	float temp = pid_calculate(&pitch_rate_controller, rate_sp_norm[1], rates_norm[1], 0.0f, deltaT);
-	actuators->control[1] = airspeed_square_inv_scaled * temp;
+	actuators->control[1] = airspeed_square_inv_scaled * pid_calculate(&pitch_rate_controller, rate_sp_norm[1], rates_norm[1], 0.0f, deltaT);
 
 	//printf("rate_sp_norm[1]: %.4f, rates_norm[1]: %.4f, actuators->control[1] %.4f,  actuators->control[1] (pure) p %.4f, airspeed_square_inv_scaled %.4f\n", (double)rate_sp_norm[1], (double)rates_norm[1], (double)actuators->control[1], (double)temp, (double)airspeed_square_inv_scaled);
 
