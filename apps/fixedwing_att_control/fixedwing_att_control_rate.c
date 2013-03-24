@@ -171,6 +171,8 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 	static int counter = 0;
 	static bool initialized = false;
 
+	const bool use_airspeed = false;
+
 	static struct fw_rate_control_params p;
 	static struct fw_rate_control_param_handles h;
 
@@ -209,7 +211,7 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 	//TODO for the moment we use groundspeed here instead of the true airspeed
 	float airspeed_square_inv_scaled;
 	float airspeed_square = 0.0f;
-	if(vehicle_status->flag_airspeed_valid && !vehicle_status->flag_hil_enabled) { //XXX: in HIL groundspeed is used
+	if(use_airspeed && vehicle_status->flag_airspeed_valid && !vehicle_status->flag_hil_enabled) { //XXX: in HIL groundspeed is used
 		airspeed_square = differential_pressure->true_airspeed_m_s * differential_pressure->true_airspeed_m_s;
 	} else {
 		airspeed_square = fabs(speed_body[0] * speed_body[0] + speed_body[1] * speed_body[1] + speed_body[2] * speed_body[2]); //use ground speed

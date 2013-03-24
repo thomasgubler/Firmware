@@ -363,6 +363,8 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 		struct debug_key_value_s dbg_acc = { .key = "acc", .value = 0.0f };
 		orb_advert_t pub_dbg_acc = orb_advertise(ORB_ID(debug_key_value), &dbg_acc);
 
+		const bool use_airspeed = false;
+
 		while(!thread_should_exit)
 		{
 			/* wait for a sensor update, check for exit condition every 500 ms */
@@ -645,16 +647,16 @@ int fixedwing_pos_control_thread_main(int argc, char *argv[])
 
 							static float airspeed_previous = 0.0f;
 							float airspeed = 0.0f;
-							if(vehicle_status.flag_airspeed_valid && !vehicle_status.flag_hil_enabled) { //XXX: in HIL groundspeed is used
+							if(use_airspeed && vehicle_status.flag_airspeed_valid && !vehicle_status.flag_hil_enabled) { //XXX: in HIL groundspeed is used
 								airspeed = differential_pressure.true_airspeed_m_s;
 							} else {
 									airspeed = sqrtf(global_pos.vx * global_pos.vx + global_pos.vy * global_pos.vy + global_pos.vz * global_pos.vz); //use groundspeed								if(counter % 50 == 0) {
-									if(!vehicle_status.flag_hil_enabled && counter % 50 == 0) {
-										int mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
-										printf("[FW Pos Ctrl]: Using groundspeed instead of airspeed\n");
-										mavlink_log_critical(mavlink_fd, "[FW Pos Ctrl]: invalid airspeed, using groundspeed");
-										close(mavlink_fd);
-									}
+//									if(!vehicle_status.flag_hil_enabled && counter % 50 == 0) {
+//										int mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+//										printf("[FW Pos Ctrl]: Using groundspeed instead of airspeed\n");
+//										mavlink_log_critical(mavlink_fd, "[FW Pos Ctrl]: invalid airspeed, using groundspeed");
+//										close(mavlink_fd);
+//									}
 								}
 
 							float acc_sp = accelereation_norm_c * pid_calculate(&speed_controller, speed_sp/speed_norm_c, airspeed/speed_norm_c, 0.0f, 0.0f);
