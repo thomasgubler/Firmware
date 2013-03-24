@@ -391,6 +391,7 @@ void	stop();
 void	test();
 void	reset();
 void	info();
+void	simulate(void *arg);
 
 /**
  * Start the driver.
@@ -486,6 +487,55 @@ info()
 	exit(0);
 }
 
+/*
+ * Simulate simple gps output for testing
+ */
+void
+simulate(void *arg)
+{
+	orb_advert_t report_pub;
+	struct vehicle_gps_position_s report;
+
+	report.lat = 473759474;
+	report.lon = 85407114;
+	report.alt = 520000;
+
+	report.timestamp_variance = hrt_absolute_time();
+	report.s_variance_m_s = 1;
+	report.p_variance_m = 1;
+	report.fix_type = 3;
+	report.eph_m = 1;
+	report.epv_m = 1;
+
+	report.timestamp_velocity = hrt_absolute_time();
+	report.vel_m_s = 0;
+	report.vel_n_m_s = 0;
+	report.vel_e_m_s = 0;
+	report.vel_d_m_s = 0;
+	report.cog_rad = 0;
+	report.vel_ned_valid = 1;
+
+//	report.timestamp_time;			/**< Timestamp for time information */
+//	report.time_gps_usec;				/**< Timestamp (microseconds in GPS format), this is the timestamp which comes from the gps module   */
+
+	report.satellite_info_available = 0;
+
+	for(;;) {
+
+		report.timestamp_position = hrt_absolute_time();
+
+
+		if (report_pub > 0) {
+			orb_publish(ORB_ID(vehicle_gps_position), report_pub, &report);
+		} else {
+			report_pub = orb_advertise(ORB_ID(vehicle_gps_position), &report);
+		}
+
+
+		usleep(500000); //approx 2 hz
+	}
+}
+
 } // namespace
 
 
@@ -530,6 +580,12 @@ gps_main(int argc, char *argv[])
 	 */
 	if (!strcmp(argv[1], "status"))
 		gps::info();
+
+	/*
+	 * Simulate simple gps output for testing
+	 */
+	if (!strcmp(argv[1], "simulate"))
+		task_create("gps", SCHED_PRIORITY_SLOW_DRIVER, 2048, (main_t)&gps::simulate, nullptr);
 
 out:
 	errx(1, "unrecognized command, try 'start', 'stop', 'test', 'reset' or 'status' [-d /dev/ttyS0-n]");
