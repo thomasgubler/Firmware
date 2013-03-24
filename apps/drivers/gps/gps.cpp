@@ -391,7 +391,7 @@ void	stop();
 void	test();
 void	reset();
 void	info();
-void	simulate(int32_t lat, int32_t lon, int32_t alt);
+void	simulate(void *arg);
 
 /**
  * Start the driver.
@@ -491,14 +491,14 @@ info()
  * Simulate simple gps output for testing
  */
 void
-simulate(int32_t lat, int32_t lon, int32_t alt)
+simulate(void *arg)
 {
 	orb_advert_t report_pub;
 	struct vehicle_gps_position_s report;
 
-	report.lat = lat;
-	report.lat = lon;
-	report.alt = alt;
+	report.lat = 473759474;
+	report.lon = 85407114;
+	report.alt = 520000;
 
 	report.timestamp_variance = hrt_absolute_time();
 	report.s_variance_m_s = 1;
@@ -585,7 +585,7 @@ gps_main(int argc, char *argv[])
 	 * Simulate simple gps output for testing
 	 */
 	if (!strcmp(argv[1], "simulate"))
-		gps::simulate(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]));
+		task_create("gps", SCHED_PRIORITY_SLOW_DRIVER, 2048, (main_t)&gps::simulate, nullptr);
 
 out:
 	errx(1, "unrecognized command, try 'start', 'stop', 'test', 'reset' or 'status' [-d /dev/ttyS0-n]");
