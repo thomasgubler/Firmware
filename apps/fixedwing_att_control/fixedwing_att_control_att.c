@@ -190,9 +190,11 @@ int fixedwing_att_control_attitude(const struct vehicle_attitude_setpoint_s *att
 
 
 	/* Use Jacobian to go from euler rates to body rates (& de-normalization) */
-	rates_sp->roll = (phi_dot - sinf(att->pitch) * psi_dot) * rate_norm_c;
-	rates_sp->pitch = (cosf(att->roll) * theta_dot + cosf(att->pitch) * sinf(att->roll) * psi_dot) * rate_norm_c;
-	rates_sp->yaw = (-sinf(att->roll) * theta_dot + cosf(att->pitch) * cosf(att->roll) * psi_dot) * rate_norm_c;
+	rates_sp->roll = (phi_dot - sinf(att->pitch) * att->yawspeed) * rate_norm_c;
+	rates_sp->pitch = (cosf(att->roll) * theta_dot + cosf(att->pitch) * sinf(att->roll) * att->yawspeed) * rate_norm_c;
+	rates_sp->yaw = (-sinf(att->roll) * theta_dot + cosf(att->pitch) * cosf(att->roll) * att->yawspeed) * rate_norm_c;
+
+	printf("pitchr %.4f, theta_dot %.4f, att->yawspeed %.4f\n", rates_sp->pitch, theta_dot, att->yawspeed);
 
 	counter++;
 

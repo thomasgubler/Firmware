@@ -215,12 +215,12 @@ int fixedwing_att_control_rates(const struct vehicle_rates_setpoint_s *rate_sp,
 		airspeed_square = differential_pressure->true_airspeed_m_s * differential_pressure->true_airspeed_m_s;
 	} else {
 		airspeed_square = fabs(speed_body[0] * speed_body[0] + speed_body[1] * speed_body[1] + speed_body[2] * speed_body[2]); //use ground speed
-		if(!vehicle_status->flag_hil_enabled && counter % 50 == 0) {
-			int mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
-			printf("[FW Att Rate Ctrl]: Using groundspeed instead of airspeed\n");
-			mavlink_log_critical(mavlink_fd, "[FW Att Rate Ctrl]: invalid airspeed, using groundspeed");
-			close(mavlink_fd);
-		}
+//		if(!vehicle_status->flag_hil_enabled && counter % 50 == 0) {
+//			int mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+//			printf("[FW Att Rate Ctrl]: Using groundspeed instead of airspeed\n");
+//			mavlink_log_critical(mavlink_fd, "[FW Att Rate Ctrl]: invalid airspeed, using groundspeed");
+//			close(mavlink_fd);
+//		}
 	}
 
 	if(airspeed_square < 100.0f) { //for safety in case of sensor failure
