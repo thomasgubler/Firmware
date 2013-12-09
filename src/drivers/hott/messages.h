@@ -66,9 +66,21 @@ struct gam_module_poll_msg {
 	uint8_t id;
 };
 
+/* The Vario Module poll message. */
+struct vario_module_poll_msg {
+	uint8_t mode;
+	uint8_t id;
+};
+
 /* Electric Air Module (EAM) constants. */
 #define EAM_SENSOR_ID			0x8e
 #define EAM_SENSOR_TEXT_ID		0xe0
+
+/* Struct Hott Sensor Type */
+typedef enum {
+	HOTT_SENSOR_TYPE_GAM,
+	HOTT_SENSOR_TYPE_VARIO
+} hott_sensor_type_t;
 
 /* The Electric Air Module message. */
 struct eam_module_msg {
@@ -232,13 +244,56 @@ struct gps_module_msg {
 	uint8_t checksum;		/**< Lower 8-bits of all bytes summed */
 };
 
+/* Vario constants. */
+#define VARIO_SENSOR_ID		0x89
+#define VARIO_SENSOR_TEXT_ID		0x90
+
+struct vario_module_msg {
+	/* #1 */
+        uint8_t start;			/**< Start byte	*/
+        uint8_t sensor_id;		/**< vario sensor id */
+        uint8_t warning_beeps;
+        uint8_t sensor_text_id;
+        uint8_t inverse_status;
+
+        /* #6 */
+        uint8_t alt_L;
+        uint8_t alt_H;			/**< Lipo cell voltages. Not supported.	*/
+        uint8_t alt_max_L;
+        uint8_t alt_max_H;
+        uint8_t alt_min_L;
+
+        /* #11 */
+        uint8_t alt_min_H;
+        uint8_t resolution_mps_L;
+        uint8_t resolution_mps_H;
+        uint8_t resolution_mp3s_L;
+        uint8_t resolution_mp3s_H;
+
+        /* #16 */
+        uint8_t resolution_mp10s_L;
+        uint8_t resolution_mp10s_H;
+
+        /* #18 to #41 */
+        uint8_t ASCII[24];
+
+        /* #42 */
+        uint8_t free;
+        uint8_t version;
+        uint8_t stop;			/**< Stop byte */
+        uint8_t checksum;		/**< Lower 8-bits of all bytes summed */
+};
+
+
 // The maximum size of a message.
 #define MAX_MESSAGE_BUFFER_SIZE 45
 
 void init_sub_messages(void);
 void init_pub_messages(void);
 void build_gam_request(uint8_t *buffer, size_t *size);
+void build_vario_request(uint8_t *buffer, size_t *size);
 void publish_gam_message(const uint8_t *buffer);
+void publish_vario_message(const uint8_t *buffer);
 void build_eam_response(uint8_t *buffer, size_t *size);
 void build_gam_response(uint8_t *buffer, size_t *size);
 void build_gps_response(uint8_t *buffer, size_t *size);

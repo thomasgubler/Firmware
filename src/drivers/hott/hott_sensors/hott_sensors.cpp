@@ -67,7 +67,7 @@ static int thread_should_exit = false;		/**< Deamon exit flag */
 static int thread_running = false;		/**< Deamon status flag */
 static int deamon_task;				/**< Handle of deamon task / thread */
 static const char daemon_name[] = "hott_sensors";
-static const char commandline_usage[] = "usage: hott_sensors start|status|stop [-d <device>]";
+static const char commandline_usage[] = "usage: hott_sensors start|status|stop [-d <device>] [-t <type>]";
 
 /**
  * Deamon management function.
@@ -110,11 +110,13 @@ recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id)
 	fds.events = POLLIN;
 	
 	// XXX should this poll be inside the while loop???
-	if (poll(&fds, 1, timeout_ms) > 0) {
+	int ret = poll(&fds, 1, timeout_ms);
+	if (ret > 0) {
 		int i = 0;
 		bool stop_byte_read = false;
 		while (true)  {
 			read(uart, &buffer[i], sizeof(buffer[i]));
+//			warnx("byte %u = %x", i + 1, buffer[i]);
 
 			if (stop_byte_read) {
 				// XXX process checksum
@@ -128,6 +130,8 @@ recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id)
 			}
 			i++;
 		}
+	} else {
+		warnx("ret = %d", ret);
 	}
 	return ERROR;
 }
@@ -140,6 +144,7 @@ hott_sensors_thread_main(int argc, char *argv[])
 	thread_running = true;
 
 	const char *device = DEFAULT_UART;
+	hott_sensor_type_t hott_sensor_type = HOTT_SENSOR_TYPE_GAM;
 
 	/* read commandline arguments */
 	for (int i = 0; i < argc && argv[i]; i++) {
@@ -151,6 +156,21 @@ hott_sensors_thread_main(int argc, char *argv[])
 				thread_running = false;
 				errx(1, "missing parameter to -d\n%s", commandline_usage);
 			}
+		} else if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--type") == 0) { //type
+			if (argc > i + 1) {
+				if ( strcmp( argv[i + 1], "gam") == 0 ) {
+					hott_sensor_type = HOTT_SENSOR_TYPE_GAM;
+				} else if ( strcmp( argv[i + 1], "vario") == 0 ) {
+					hott_sensor_type = HOTT_SENSOR_TYPE_VARIO;
+				} else {
+					errx(1, "unsupported sensor type %s",  argv[i + 1]);
+				}
+
+			} else {
+				thread_running = false;
+				errx(1, "missing parameter to -t\n%s", commandline_usage);
+			}
+
 		}
 	}
 
@@ -167,8 +187,19 @@ hott_sensors_thread_main(int argc, char *argv[])
 	size_t size = 0;
 	uint8_t id = 0;
 	while (!thread_should_exit) {
-		// Currently we only support a General Air Module sensor.
-		build_gam_request(&buffer[0], &size);
+		/* Send configuration */
+		switch (hott_sensor_type) {
+		case HOTT_SENSOR_TYPE_GAM:
+			build_gam_request(&buffer[0], &size);
+			break;
+		case HOTT_SENSOR_TYPE_VARIO:
+			build_vario_request(&buffer[0], &size);
+			break;
+		default:
+			warnx("Unknown sensor type");
+			break;
+		}
+
 		send_poll(uart, buffer, size);
 
 		// The sensor will need a little time before it starts sending.
@@ -176,10 +207,13 @@ hott_sensors_thread_main(int argc, char *argv[])
 
 		recv_data(uart, &buffer[0], &size, &id);
 
-		// Determine which moduel sent it and process accordingly.
+		// Determine which module sent it and process accordingly.
 		if (id == GAM_SENSOR_ID) {
 			publish_gam_message(buffer);
-		} else {
+		} else if (id == VARIO_SENSOR_ID) {
+			publish_vario_message(buffer);
+		}
+		else {
 			warnx("Unknown sensor ID: %d", id);
 		}
 	}
