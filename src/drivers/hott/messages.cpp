@@ -50,6 +50,7 @@
 #include <uORB/topics/home_position.h>
 #include <uORB/topics/sensor_combined.h>
 #include <uORB/topics/vehicle_gps_position.h>
+#include <systemlib/err.h>
 
 /* The board is very roughly 5 deg warmer than the surrounding air */
 #define BOARD_TEMP_OFFSET_DEG 5
@@ -100,6 +101,19 @@ build_gam_request(uint8_t *buffer, size_t *size)
 }
 
 void
+build_vario_request(uint8_t *buffer, size_t *size)
+{
+	struct gam_module_poll_msg msg;
+	*size = sizeof(msg);
+	memset(&msg, 0, *size);
+
+	msg.mode = BINARY_MODE_REQUEST_ID;
+	msg.id = VARIO_SENSOR_ID;
+
+	memcpy(buffer, &msg, *size);
+}
+
+void
 publish_gam_message(const uint8_t *buffer)
 {
 	struct gam_module_msg msg;
@@ -123,6 +137,35 @@ publish_gam_message(const uint8_t *buffer)
 	_esc.esc[0].esc_temperature = msg.temperature1 - 20; 
 	_esc.esc[0].esc_voltage = (uint16_t)((msg.main_voltage_H << 8) | (msg.main_voltage_L & 0xff));
 	_esc.esc[0].esc_current = (uint16_t)((msg.current_H << 8) | (msg.current_L & 0xff));
+}
+
+void
+publish_vario_message(const uint8_t *buffer)
+{
+	struct vario_module_msg msg;
+	size_t size = sizeof(msg);
+	memset(&msg, 0, size);
+	memcpy(&msg, buffer, size);
+
+	uint16_t altitude = (uint16_t) ((msg.alt_H << 8) | (msg.alt_L));
+	warnx("publish_vario_message alt: %d, %x, %x", (int)altitude, msg.alt_H, msg.alt_L);
+
+//	/* announce the esc if needed, just publish else */
+//	if (_esc_pub > 0) {
+//		orb_publish(ORB_ID(esc_status), _esc_pub, &_esc);
+//	} else {
+//		_esc_pub = orb_advertise(ORB_ID(esc_status), &_esc);
+//	}
+
+//	// Publish it.
+//	_esc.esc_count = 1;
+//	_esc.esc_connectiontype = ESC_CONNECTION_TYPE_PPM;
+//
+//	_esc.esc[0].esc_vendor = ESC_VENDOR_GRAUPNER_HOTT;
+//	_esc.esc[0].esc_rpm = (uint16_t)((msg.rpm_H << 8) | (msg.rpm_L & 0xff)) * 10;
+//	_esc.esc[0].esc_temperature = msg.temperature1 - 20;
+//	_esc.esc[0].esc_voltage = (uint16_t)((msg.main_voltage_H << 8) | (msg.main_voltage_L & 0xff));
+//	_esc.esc[0].esc_current = (uint16_t)((msg.current_H << 8) | (msg.current_L & 0xff));
 }
 
 void 
