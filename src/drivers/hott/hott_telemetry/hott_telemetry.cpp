@@ -56,6 +56,7 @@
 
 #include "../comms.h"
 #include "../messages.h"
+#include "../uorb_interface.h"
 
 #define DEFAULT_UART "/dev/ttyS0";		/**< USART1 */
 
