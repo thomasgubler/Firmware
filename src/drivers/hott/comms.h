@@ -34,13 +34,17 @@
 /**
  * @file comms.h
  * @author Simon Wilks <sjwilks@gmail.com>
- *
+ * @author Thomas Gubler <thomasgubler@gmail.com>
  */
 
 
 #ifndef COMMS_H_
 #define COMMS_H
 
+#include <unistd.h>
+
 int open_uart(const char *device);
+int recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id);
+int send_poll(int uart, uint8_t *buffer, size_t size);
 
 #endif /* COMMS_H_ */

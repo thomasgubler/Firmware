@@ -44,6 +44,16 @@
 #include <sys/ioctl.h>
 #include <systemlib/err.h>
 #include <termios.h>
+#include <poll.h>
+#include <unistd.h>
+
+#include "messages.h"
+
+/* Oddly, ERROR is not defined for C++ */
+#ifdef ERROR
+# undef ERROR
+#endif
+static const int ERROR = -1;
 
 int
 open_uart(const char *device)
@@ -89,4 +99,58 @@ open_uart(const char *device)
 	ioctl(uart, TIOCSSINGLEWIRE, SER_SINGLEWIRE_ENABLED);
 
 	return uart;
+}
+
+int
+send_poll(int uart, uint8_t *buffer, size_t size)
+{
+	for (size_t i = 0; i < size; i++) {
+		write(uart, &buffer[i], sizeof(buffer[i]));
+
+		/* Sleep before sending the next byte. */
+		usleep(POST_WRITE_DELAY_IN_USECS);
+	}
+
+	/* A hack the reads out what was written so the next read from the receiver doesn't get it. */
+	/* TODO: Fix this!! */
+	uint8_t dummy[size];
+	read(uart, &dummy, size);
+
+	return OK;
+}
+
+int
+recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id)
+{
+	static const int timeout_ms = 1000;
+
+	struct pollfd fds;
+	fds.fd = uart;
+	fds.events = POLLIN;
+
+	// XXX should this poll be inside the while loop???
+	int ret = poll(&fds, 1, timeout_ms);
+	if (ret > 0) {
+		int i = 0;
+		bool stop_byte_read = false;
+		while (true)  {
+			read(uart, &buffer[i], sizeof(buffer[i]));
+//			warnx("byte %u = %x", i + 1, buffer[i]);
+
+			if (stop_byte_read) {
+				// XXX process checksum
+				*size = ++i;
+				return OK;
+			}
+			// XXX can some other field not have the STOP BYTE value?
+			if (buffer[i] == STOP_BYTE) {
+				*id = buffer[1];
+				stop_byte_read = true;
+			}
+			i++;
+		}
+	} else {
+		warnx("ret = %d", ret);
+	}
+	return ERROR;
 }
