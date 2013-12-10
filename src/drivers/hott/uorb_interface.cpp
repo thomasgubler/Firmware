@@ -123,24 +123,10 @@ publish_vario_message(const uint8_t *buffer)
 	memcpy(&msg, buffer, size);
 
 	uint16_t altitude = (uint16_t) ((msg.alt_H << 8) | (msg.alt_L));
-	warnx("publish_vario_message alt: %d, %x, %x", (int)altitude, msg.alt_H, msg.alt_L);
 
-//	/* announce the esc if needed, just publish else */
-//	if (_esc_pub > 0) {
-//		orb_publish(ORB_ID(esc_status), _esc_pub, &_esc);
-//	} else {
-//		_esc_pub = orb_advertise(ORB_ID(esc_status), &_esc);
-//	}
+//	warnx("publish_vario_message alt: %d, %x, %x", (int)altitude, msg.alt_H, msg.alt_L);
 
-//	// Publish it.
-//	_esc.esc_count = 1;
-//	_esc.esc_connectiontype = ESC_CONNECTION_TYPE_PPM;
-//
-//	_esc.esc[0].esc_vendor = ESC_VENDOR_GRAUPNER_HOTT;
-//	_esc.esc[0].esc_rpm = (uint16_t)((msg.rpm_H << 8) | (msg.rpm_L & 0xff)) * 10;
-//	_esc.esc[0].esc_temperature = msg.temperature1 - 20;
-//	_esc.esc[0].esc_voltage = (uint16_t)((msg.main_voltage_H << 8) | (msg.main_voltage_L & 0xff));
-//	_esc.esc[0].esc_current = (uint16_t)((msg.current_H << 8) | (msg.current_L & 0xff));
+	//xxx: publish to uorb if needed
 }
 
 void 
