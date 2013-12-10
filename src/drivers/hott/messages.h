@@ -35,11 +35,12 @@
 /**
  * @file messages.h
  * @author Simon Wilks <sjwilks@gmail.com>
+ * @author Thomas Gubler <thomasgubler@gmail.com>
  *
  * Graupner HoTT Telemetry message generation.
  *
  */
-#ifndef MESSAGES_H_
+#ifndef MESSAGES_H
 #define MESSAGES_H
 
 #include <stdlib.h>
@@ -288,16 +289,8 @@ struct vario_module_msg {
 // The maximum size of a message.
 #define MAX_MESSAGE_BUFFER_SIZE 45
 
-void init_sub_messages(void);
-void init_pub_messages(void);
 void build_gam_request(uint8_t *buffer, size_t *size);
 void build_vario_request(uint8_t *buffer, size_t *size);
-void publish_gam_message(const uint8_t *buffer);
-void publish_vario_message(const uint8_t *buffer);
-void build_eam_response(uint8_t *buffer, size_t *size);
-void build_gam_response(uint8_t *buffer, size_t *size);
-void build_gps_response(uint8_t *buffer, size_t *size);
-float _get_distance_to_next_waypoint(double lat_now, double lon_now, double lat_next, double lon_next);
 void convert_to_degrees_minutes_seconds(double lat, int *deg, int *min, int *sec);
 
 

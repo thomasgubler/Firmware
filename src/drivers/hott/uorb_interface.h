@@ -1,7 +1,7 @@
 /****************************************************************************
  *
- *   Copyright (C) 2012 PX4 Development Team. All rights reserved.
- *   Author: @author Simon Wilks <sjwilks@gmail.com>
+ *   Copyright (c) 2012, 2013 PX4 Development Team. All rights reserved.
+ *   Author: Simon Wilks <sjwilks@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,59 +33,26 @@
  ****************************************************************************/
 
 /**
- * @file messages.c
+ * @file uorb_interface.h
+ * @author Simon Wilks <sjwilks@gmail.com>
+ * @author Thomas Gubler <thomasgubler@gmail.com>
+ *
+ * UOrb helper functions for Graupner HoTT Telemetry driver
  *
  */
+#ifndef UORB_INTERFACE_H
+#define UORB_INTERFACE_H
 
-#include "messages.h"
+#include <stdlib.h>
 
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
-#include <geo/geo.h>
-#include <unistd.h>
-#include <uORB/topics/airspeed.h>
-#include <uORB/topics/battery_status.h>
-#include <uORB/topics/esc_status.h>
-#include <uORB/topics/home_position.h>
-#include <uORB/topics/sensor_combined.h>
-#include <uORB/topics/vehicle_gps_position.h>
-#include <systemlib/err.h>
 
-void
-build_gam_request(uint8_t *buffer, size_t *size)
-{
-	struct gam_module_poll_msg msg;
-	*size = sizeof(msg);
-	memset(&msg, 0, *size);
+void init_sub_messages(void);
+void init_pub_messages(void);
+void publish_gam_message(const uint8_t *buffer);
+void publish_vario_message(const uint8_t *buffer);
+void build_eam_response(uint8_t *buffer, size_t *size);
+void build_gam_response(uint8_t *buffer, size_t *size);
+void build_gps_response(uint8_t *buffer, size_t *size);
 
-	msg.mode = BINARY_MODE_REQUEST_ID;
-	msg.id = GAM_SENSOR_ID;
 
-	memcpy(buffer, &msg, *size);
-}
-
-void
-build_vario_request(uint8_t *buffer, size_t *size)
-{
-	struct gam_module_poll_msg msg;
-	*size = sizeof(msg);
-	memset(&msg, 0, *size);
-
-	msg.mode = BINARY_MODE_REQUEST_ID;
-	msg.id = VARIO_SENSOR_ID;
-
-	memcpy(buffer, &msg, *size);
-}
-
-void
-convert_to_degrees_minutes_seconds(double val, int *deg, int *min, int *sec)
-{
-	*deg = (int)val;
-
-	double delta = val - *deg;
-	const double min_d = delta * 60.0d;
-	*min = (int)min_d;
-	delta = min_d - *min;
-	*sec = (int)(delta * 10000.0d);
-}
+#endif /* UORB_INTERFACE_H */
