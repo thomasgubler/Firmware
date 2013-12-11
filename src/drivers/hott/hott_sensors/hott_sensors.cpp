@@ -33,7 +33,7 @@
  ****************************************************************************/
 
 /**
- * @file hott_sensors.c
+ * @file hott_sensors.cpp
  * @author Simon Wilks <sjwilks@gmail.com>
  *
  * Graupner HoTT sensor driver implementation.
@@ -56,7 +56,7 @@
 #include "../messages.h"
 #include "../uorb_interface.h"
 
-#define DEFAULT_UART "/dev/ttyS0";		/**< USART1 */
+#define DEFAULT_UART "/dev/ttyS0";		/**< DSM input (USART1) */
 
 /* Oddly, ERROR is not defined for C++ */
 #ifdef ERROR
@@ -131,7 +131,7 @@ hott_sensors_thread_main(int argc, char *argv[])
 	size_t size = 0;
 	uint8_t id = 0;
 	while (!thread_should_exit) {
-		/* Send configuration */
+		/* Send poll request */
 		switch (hott_sensor_type) {
 		case HOTT_SENSOR_TYPE_GAM:
 			build_gam_request(&buffer[0], &size);

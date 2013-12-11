@@ -166,6 +166,11 @@ user_start(int argc, char *argv[])
 	/* initialise the control inputs */
 	controls_init();
 
+	/* initialise the hott sensors */
+#ifdef PX4IO_ENABLE_HOTT
+	controls_init();
+#endif
+
 	/* start the FMU interface */
 	interface_init();
 
@@ -174,6 +179,9 @@ user_start(int argc, char *argv[])
 
 	/* add a performance counter for controls */
 	perf_counter_t controls_perf = perf_alloc(PC_ELAPSED, "controls");
+
+	/* add a performance counter for hott sensors */
+	perf_counter_t hott_perf = perf_alloc(PC_ELAPSED, "hott");
 
 	/* and one for measuring the loop rate */
 	perf_counter_t loop_perf = perf_alloc(PC_INTERVAL, "loop");
@@ -223,6 +231,13 @@ user_start(int argc, char *argv[])
 		perf_begin(controls_perf);
 		controls_tick();
 		perf_end(controls_perf);
+
+#ifdef PX4IO_ENABLE_HOTT
+		/* kick the hott sensors */
+		perf_begin(hott_perf);
+		hott_vario_tick();
+		perf_end(hott_perf);
+#endif
 
                 if ((hrt_absolute_time() - last_heartbeat_time) > 250*1000) {
                     last_heartbeat_time = hrt_absolute_time();

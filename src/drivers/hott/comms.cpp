@@ -149,8 +149,9 @@ recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id)
 			}
 			i++;
 		}
-	} else {
-		warnx("ret = %d", ret);
 	}
+//	else {
+//		warnx("ret = %d", ret);
+//	}
 	return ERROR;
 }

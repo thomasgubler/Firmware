@@ -59,11 +59,15 @@ static perf_counter_t c_gather_ppm;
 void
 controls_init(void)
 {
+#ifdef PX4IO_ENABLE_DSM
 	/* DSM input (USART1) */
 	dsm_init("/dev/ttyS0");
+#endif
 
+#ifdef PX4IO_ENABLE_SBUS
 	/* S.bus input (USART3) */
 	sbus_init("/dev/ttyS2");
+#endif
 
 	/* default to a 1:1 input map, all enabled */
 	for (unsigned i = 0; i < PX4IO_CONTROL_CHANNELS; i++) {
@@ -93,10 +97,13 @@ controls_tick() {
 	 * one control input source, they're going to fight each
 	 * other.  Don't do that.
 	 */
+	bool dsm_updated = false;
+	bool sbus_updated = false;
 
+#ifdef PX4IO_ENABLE_DSM
 	perf_begin(c_gather_dsm);
 	uint16_t temp_count = r_raw_rc_count;
-	bool dsm_updated = dsm_input(r_raw_rc_values, &temp_count);
+	dsm_updated = dsm_input(r_raw_rc_values, &temp_count);
 	if (dsm_updated) {
 		r_status_flags |= PX4IO_P_STATUS_FLAGS_RC_DSM;
 		r_raw_rc_count = temp_count & 0x7fff;
@@ -106,15 +113,17 @@ controls_tick() {
 			r_status_flags &= ~PX4IO_P_STATUS_FLAGS_RC_DSM11;
 	}
 	perf_end(c_gather_dsm);
+#endif
 
+#ifdef PX4IO_ENABLE_SBUS
 	perf_begin(c_gather_sbus);
-	bool sbus_updated = sbus_input(r_raw_rc_values, &r_raw_rc_count, PX4IO_CONTROL_CHANNELS /* XXX this should be INPUT channels, once untangled */);
+	sbus_updated = sbus_input(r_raw_rc_values, &r_raw_rc_count, PX4IO_CONTROL_CHANNELS /* XXX this should be INPUT channels, once untangled */);
 	if (sbus_updated) {
 		r_status_flags |= PX4IO_P_STATUS_FLAGS_RC_SBUS;
 		r_raw_rc_count = 8;
 	}
 	perf_end(c_gather_sbus);
-
+#endif
 	/*
 	 * XXX each S.bus frame will cause a PPM decoder interrupt
 	 * storm (lots of edges).  It might be sensible to actually

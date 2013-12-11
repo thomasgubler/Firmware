@@ -152,6 +152,10 @@
 #define PX4IO_PAGE_PWM_INFO		7
 #define PX4IO_RATE_MAP_BASE			0	/* 0..CONFIG_ACTUATOR_COUNT bitmaps of PWM rate groups */
 
+/* external HOTT sensors */
+#define PX4IO_PAGE_HOTT		8
+#define PX4IO_P_HOTT_VARIO_ALT			0	/* 0..CONFIG_ACTUATOR_COUNT bitmaps of PWM rate groups */
+
 /* setup page */
 #define PX4IO_PAGE_SETUP		50
 #define PX4IO_P_SETUP_FEATURES			0

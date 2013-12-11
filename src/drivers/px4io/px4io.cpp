@@ -346,6 +346,11 @@ private:
 	int			io_publish_pwm_outputs();
 
 	/**
+	 * Fetch and publish the altitude of hott vario sensor
+	 */
+	int			io_publish_hott_vario_alt();
+
+	/**
 	 * write register(s)
 	 *
 	 * @param page		Register page to write to.
@@ -863,9 +868,10 @@ PX4IO::task_main()
 			/* get raw R/C input from IO */
 			io_publish_raw_rc();
 
-			/* fetch mixed servo controls and PWM outputs from IO */
+			/* fetch mixed servo controls, PWM outputs and hott sensor values from IO */
 			io_publish_mixed_controls();
 			io_publish_pwm_outputs();
+			io_publish_hott_vario_alt();
 		}
 
 		if (now >= orb_check_last + ORB_CHECK_INTERVAL) {
@@ -1522,6 +1528,27 @@ PX4IO::io_publish_pwm_outputs()
 			    _to_outputs,
 			    &outputs);
 	}
+
+	return OK;
+}
+
+int
+PX4IO::io_publish_hott_vario_alt()
+{
+	/* if no FMU comms(!) just don't publish */
+	if (!(_status & PX4IO_P_STATUS_FLAGS_FMU_OK))
+		return OK;
+
+	/* Get data from register */
+	uint16_t altitude_reg;
+	int ret = io_reg_get(PX4IO_PAGE_HOTT, PX4IO_P_HOTT_VARIO_ALT, &altitude_reg, 1);
+
+	/* convert from register format to signed integer */
+	int16_t altitude = REG_TO_SIGNED(altitude_reg);
+
+	warnx("io_publish_hott_vario_alt alt: %d", (int)altitude);
+
+	//xxx: publish to uorb if needed
 
 	return OK;
 }
