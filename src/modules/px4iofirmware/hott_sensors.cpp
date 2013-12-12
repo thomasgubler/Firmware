@@ -54,7 +54,7 @@
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
 
-#include <drivers/hott/comms.h>
+#include <drivers/hott/comms_io.h>
 #include <drivers/hott/messages.h>
 
 
@@ -86,7 +86,7 @@ hott_vario_tick(void)
 	build_vario_request(&buffer[0], &size);
 
 	// The sensor will need a little time before it starts sending.
-	usleep(5000);
+//	usleep(5000);
 
 	recv_data(uart, &buffer[0], &size, &id);
 

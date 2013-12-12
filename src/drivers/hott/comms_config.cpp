@@ -32,20 +32,18 @@
  ****************************************************************************/
 
 /**
- * @file comms.cpp
+ * @file comms_config.cpp
  * @author Simon Wilks <sjwilks@gmail.com>
  *
  */
 
-#include "comms.h"
+#include "comms_config.h"
 
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <systemlib/err.h>
 #include <termios.h>
-#include <poll.h>
-#include <unistd.h>
 
 #include "messages.h"
 
@@ -56,56 +54,47 @@
 static const int ERROR = -1;
 
 int
-send_poll(int uart, uint8_t *buffer, size_t size)
+open_uart(const char *device)
 {
-	for (size_t i = 0; i < size; i++) {
-		write(uart, &buffer[i], sizeof(buffer[i]));
+	/* baud rate */
+	static const speed_t speed = B19200;
 
-		/* Sleep before sending the next byte. */
-		usleep(POST_WRITE_DELAY_IN_USECS);
+	/* open uart */
+	const int uart = open(device, O_RDWR | O_NOCTTY);
+
+	if (uart < 0) {
+		err(1, "Error opening port: %s", device);
+	}
+	
+	/* Back up the original uart configuration to restore it after exit */	
+	int termios_state;
+	struct termios uart_config_original;
+	if ((termios_state = tcgetattr(uart, &uart_config_original)) < 0) {
+		close(uart);
+		err(1, "Error getting baudrate / termios config for %s: %d", device, termios_state);
 	}
 
-	/* A hack the reads out what was written so the next read from the receiver doesn't get it. */
-	/* TODO: Fix this!! */
-	uint8_t dummy[size];
-	read(uart, &dummy, size);
+	/* Fill the struct for the new configuration */
+	struct termios uart_config;
+	tcgetattr(uart, &uart_config);
 
-	return OK;
-}
+	/* Clear ONLCR flag (which appends a CR for every LF) */
+	uart_config.c_oflag &= ~ONLCR;
 
-int
-recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id)
-{
-	static const int timeout_ms = 1000;
-
-	struct pollfd fds;
-	fds.fd = uart;
-	fds.events = POLLIN;
-
-	// XXX should this poll be inside the while loop???
-	int ret = poll(&fds, 1, timeout_ms);
-	if (ret > 0) {
-		int i = 0;
-		bool stop_byte_read = false;
-		while (true)  {
-			read(uart, &buffer[i], sizeof(buffer[i]));
-//			warnx("byte %u = %x", i + 1, buffer[i]);
-
-			if (stop_byte_read) {
-				// XXX process checksum
-				*size = ++i;
-				return OK;
-			}
-			// XXX can some other field not have the STOP BYTE value?
-			if (buffer[i] == STOP_BYTE) {
-				*id = buffer[1];
-				stop_byte_read = true;
-			}
-			i++;
-		}
+	/* Set baud rate */
+	if (cfsetispeed(&uart_config, speed) < 0 || cfsetospeed(&uart_config, speed) < 0) {
+		close(uart);
+		err(1, "Error setting baudrate / termios config for %s: %d (cfsetispeed, cfsetospeed)",
+			 device, termios_state);
 	}
-//	else {
-//		warnx("ret = %d", ret);
-//	}
-	return ERROR;
+
+	if ((termios_state = tcsetattr(uart, TCSANOW, &uart_config)) < 0) {
+		close(uart);
+		err(1, "Error setting baudrate / termios config for %s (tcsetattr)", device);
+	}
+
+	/* Activate single wire mode */
+	ioctl(uart, TIOCSSINGLEWIRE, SER_SINGLEWIRE_ENABLED);
+
+	return uart;
 }

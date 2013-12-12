@@ -40,4 +40,5 @@ MODULE_COMMAND	= hott_telemetry
 SRCS		= hott_telemetry.cpp \
 		  ../messages.cpp \
 		  ../uorb_interface.cpp \
+		  ../comms_config.cpp \
 		  ../comms.cpp

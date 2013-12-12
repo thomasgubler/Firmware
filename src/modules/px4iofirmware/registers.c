@@ -134,6 +134,16 @@ uint16_t		r_page_rc_input[] = {
 uint16_t		r_page_scratch[32];
 
 /**
+ * PAGE 8
+ *
+ * External Hott sensor values (vario for now)
+ *
+ */
+uint16_t		r_page_hott[] = {
+		[PX4IO_P_HOTT_VARIO_ALT]	= 0
+};
+
+/**
  * PAGE 100
  *
  * Setup registers

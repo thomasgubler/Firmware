@@ -16,7 +16,7 @@ SRCS		= adc.c \
 		  ../systemlib/mixer/mixer_simple.cpp \
 		  ../systemlib/pwm_limit/pwm_limit.c \
 		  hott_sensors.cpp \
-		  ../../drivers/hott/comms.cpp \
+		  ../../drivers/hott/comms_io.cpp \
 		  ../../drivers/hott/messages.cpp
 
 ifeq ($(BOARD),px4io-v1)

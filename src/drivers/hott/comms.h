@@ -41,6 +41,8 @@
 #ifndef COMMS_H_
 #define COMMS_H
 
+#include "comms_config.h"
+
 #include <unistd.h>
 
 int open_uart(const char *device);
