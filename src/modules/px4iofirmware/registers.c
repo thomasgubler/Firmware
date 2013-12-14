@@ -825,6 +825,11 @@ registers_get(uint8_t page, uint8_t offset, uint16_t **values, unsigned *num_val
 		SELECT_PAGE(r_page_servo_disarmed);
 		break;
 
+	/* hott sensor page */
+	case PX4IO_PAGE_HOTT:
+		SELECT_PAGE(r_page_hott);
+		break;
+
 	default:
 		return -1;
 	}
