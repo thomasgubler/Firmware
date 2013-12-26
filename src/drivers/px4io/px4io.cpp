@@ -1495,7 +1495,7 @@ PX4IO::io_publish_hott_vario_alt()
 	/* convert from register format to signed integer */
 	int16_t altitude = REG_TO_SIGNED(altitude_reg);
 
-	warnx("io_publish_hott_vario_alt alt: %d", (int)altitude);
+//	warnx("io_publish_hott_vario_alt alt: %d", (int)altitude);
 
 	//xxx: publish to uorb if needed
 

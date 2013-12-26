@@ -43,10 +43,12 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
-#include <systemlib/err.h>
 #include <termios.h>
-#include <poll.h>
 #include <unistd.h>
+#include <errno.h>
+
+
+#include <drivers/drv_hrt.h>
 
 #include "messages.h"
 
@@ -56,58 +58,176 @@
 #endif
 static const int ERROR = -1;
 
+hrt_abstime hott_last_rx_time = 0;		/**< Timestamp when we last received */
+hrt_abstime hott_last_tx_time = 0;		/**< Timestamp when we last sent data */
+hrt_abstime hott_last_tx_byte_time = 0;	/**< Timestamp when we last sent a byte */
+unsigned hott_partial_frame_count = 0;	/**< Count of bytes received for current hott frame */
+unsigned hott_frame_drops = 0;		/**< Count of incomplete Hott frames */
+size_t poll_index = 0;
 
 int
-send_poll(int uart, uint8_t *buffer, size_t size)
+open_uart(const char *device)
 {
-//	for (size_t i = 0; i < size; i++) {
-//		write(uart, &buffer[i], sizeof(buffer[i]));
-//
-//		/* Sleep before sending the next byte. */
-//		usleep(POST_WRITE_DELAY_IN_USECS);
-//	}
-//
-//	/* A hack the reads out what was written so the next read from the receiver doesn't get it. */
-//	/* TODO: Fix this!! */
-//	uint8_t dummy[size];
-//	read(uart, &dummy, size);
+	/* baud rate */
+	static const speed_t speed = B19200;
 
-	return OK;
+	/* open uart */
+	int uart = open(device, O_RDWR |  O_NOCTTY | O_NONBLOCK);
+
+//	if (uart < 0) {
+//		err(1, "Error opening port: %s", device);
+//	}
+
+	/* Back up the original uart configuration to restore it after exit */
+	int termios_state;
+	struct termios uart_config_original;
+	if ((termios_state = tcgetattr(uart, &uart_config_original)) < 0) {
+		close(uart);
+//		err(1, "Error getting baudrate / termios config for %s: %d", device, termios_state);
+	}
+
+	/* Fill the struct for the new configuration */
+	struct termios uart_config;
+	tcgetattr(uart, &uart_config);
+
+	/* Clear ONLCR flag (which appends a CR for every LF) */
+	uart_config.c_oflag &= ~ONLCR;
+
+	/* Set baud rate */
+	if (cfsetispeed(&uart_config, speed) < 0 || cfsetospeed(&uart_config, speed) < 0) {
+		close(uart);
+//		err(1, "Error setting baudrate / termios config for %s: %d (cfsetispeed, cfsetospeed)",
+//			 device, termios_state);
+	}
+
+	if ((termios_state = tcsetattr(uart, TCSANOW, &uart_config)) < 0) {
+		close(uart);
+//		err(1, "Error setting baudrate / termios config for %s (tcsetattr)", device);
+	}
+
+	/* Activate single wire mode */
+	if (ioctl(uart, TIOCSSINGLEWIRE, SER_SINGLEWIRE_ENABLED) < 0) {
+		int error_number = errno;
+		uart = error_number;
+		close(uart);
+	}
+
+	return uart;
+}
+
+
+int
+send_poll(int uart, uint8_t *buffer, size_t size, int16_t *debug)
+{
+
+	hrt_abstime	now;
+	now = hrt_absolute_time();
+	int a = 0;
+
+	if ( poll_index < size) {
+
+
+//	if ((now - hott_last_tx_time) > (hrt_abstime)1e6) {
+
+		if (poll_index < size) {
+			if (now - hott_last_tx_byte_time > (hrt_abstime)POST_WRITE_DELAY_IN_USECS) {
+				int write_res = write(uart, &buffer[poll_index], sizeof(buffer[poll_index]));
+				*debug = (int16_t)write_res;
+
+				/* Sleep before sending the next byte. */
+	//			usleep(POST_WRITE_DELAY_IN_USECS);
+				hott_last_tx_byte_time = now;
+				poll_index++;
+
+
+				if ( poll_index >= size) {
+					hott_last_tx_time = now;
+					poll_index = 0;
+					*debug = (int16_t)write_res;
+					return OK;
+				}
+
+			}
+		} else {
+			hott_last_tx_time = now;
+			poll_index = 0;
+			return OK;
+		}
+
+	} else if (poll_index >= size && now > 5000){
+		poll_index = 0;
+
+	}
+
+
+//	}
+
+	return ERROR;
+
 }
 
 int
-recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id)
+recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id, int16_t *debug)
 {
-//	static const int timeout_ms = 1000;
-//
-//	struct pollfd fds;
-//	fds.fd = uart;
-//	fds.events = POLLIN;
-//
-//	// XXX should this poll be inside the while loop???
-//	int ret = poll(&fds, 1, timeout_ms);
-//	if (ret > 0) {
-//		int i = 0;
-//		bool stop_byte_read = false;
-//		while (true)  {
-//			read(uart, &buffer[i], sizeof(buffer[i]));
-////			warnx("byte %u = %x", i + 1, buffer[i]);
-//
-//			if (stop_byte_read) {
-//				// XXX process checksum
-//				*size = ++i;
-//				return OK;
-//			}
-//			// XXX can some other field not have the STOP BYTE value?
-//			if (buffer[i] == STOP_BYTE) {
-//				*id = buffer[1];
-//				stop_byte_read = true;
-//			}
-//			i++;
-//		}
-//	}
-////	else {
-////		warnx("ret = %d", ret);
-////	}
+	if (hott_input(uart, buffer, size, id, debug) ) {
+		return OK;
+	}
 	return ERROR;
+}
+
+bool hott_input(int uart, uint8_t *buffer, size_t *size, uint8_t *id, int16_t *debug)
+{
+	ssize_t		ret;
+	hrt_abstime	now;
+
+	now = hrt_absolute_time();
+
+	if ((now - hott_last_rx_time) > 2e6) {
+		if (hott_partial_frame_count > 0) {
+			hott_frame_drops++;
+			hott_partial_frame_count = 0;
+		}
+	}
+
+	if (hott_partial_frame_count >= MAX_MESSAGE_BUFFER_SIZE) {
+		hott_partial_frame_count = 0;
+	}
+
+	/*
+	 * Fetch bytes, but no more than we would need to complete
+	 * the current hott frame.
+	 */
+	ret = read(uart, &buffer[hott_partial_frame_count], sizeof(struct vario_module_msg) - hott_partial_frame_count);
+	*debug = (int16_t)ret;
+
+	/* if the read failed for any reason, just give up here */
+	if (ret < 1)
+		return false;
+
+	hott_last_rx_time = now;
+
+	/*
+	 * Add bytes to the current hott frame
+	 */
+	hott_partial_frame_count += ret;
+
+	/*
+	 * If we don't have a full hott  frame, return
+	 */
+//	if ( buffer[hott_partial_frame_count - 1] != STOP_BYTE) //(hott_partial_frame_count < sizeof(struct vario_module_msg)) ||
+//		return false;
+	if ( hott_partial_frame_count < sizeof(struct vario_module_msg))
+		return false;
+
+	/*
+	 * Great, it looks like we might have a hott frame.  Go ahead and
+	 * decode it (done in hott_vario_tick).
+	 */
+	hott_partial_frame_count = 0;
+	return true;
+}
+
+int get_usec_since_poll() {
+
+	return hrt_absolute_time() - hott_last_tx_time;
 }

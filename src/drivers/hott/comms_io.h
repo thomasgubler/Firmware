@@ -44,9 +44,22 @@
 #ifndef COMMS_IO_H_
 #define COMMS_IO_H_
 
-#include "comms_config.h"
+#include <stdbool.h>
+#include <unistd.h>
 
-int recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id);
-int send_poll(int uart, uint8_t *buffer, size_t size);
+int open_uart(const char *device);
+
+/**
+ *  Receive data from the hott sensor, on the px4io this is a wrapper function for hott_input
+ */
+int recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id, int16_t *debug);
+int send_poll(int uart, uint8_t *buffer, size_t size, int16_t *debug);
+
+/**
+ *  Px4io specific read without using poll (inspired by the dsm and sbus input for px4iofirmware)
+ */
+bool hott_input(int uart, uint8_t *buffer, size_t *size, uint8_t *id, int16_t *debug);
+
+int get_usec_since_poll();
 
 #endif /* COMMS_IO_H_ */

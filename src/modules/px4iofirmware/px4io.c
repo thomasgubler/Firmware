@@ -90,15 +90,16 @@ static char msg[NUM_MSG][40];
 void
 isr_debug(uint8_t level, const char *fmt, ...)
 {
-	if (level > r_page_setup[PX4IO_P_SETUP_SET_DEBUG]) {
-		return;
-	}
-	va_list ap;
-	va_start(ap, fmt);
-	vsnprintf(msg[msg_next_in], sizeof(msg[0]), fmt, ap);
-	va_end(ap);
-	msg_next_in = (msg_next_in+1) % NUM_MSG;
-	msg_counter++;
+//	if (level > r_page_setup[PX4IO_P_SETUP_SET_DEBUG]) {
+//		return;
+//	}
+//	va_list ap;
+//	va_start(ap, fmt);
+//	vsnprintf(msg[msg_next_in], sizeof(msg[0]), fmt, ap);
+//	va_end(ap);
+//	msg_next_in = (msg_next_in+1) % NUM_MSG;
+//	msg_counter++;
+	return; //xxx
 }
 
 /*
@@ -188,7 +189,7 @@ user_start(int argc, char *argv[])
 
 	/* initialise the hott sensors */
 #ifdef PX4IO_ENABLE_HOTT
-	controls_init();
+	hott_vario_init();
 #endif
 
 	/* start the FMU interface */
@@ -244,12 +245,12 @@ user_start(int argc, char *argv[])
 
 		/* kick the mixer */
 		perf_begin(mixer_perf);
-		mixer_tick();
+//		mixer_tick();
 		perf_end(mixer_perf);
 
 		/* kick the control inputs */
 		perf_begin(controls_perf);
-		controls_tick();
+//		controls_tick();
 		perf_end(controls_perf);
 
 #ifdef PX4IO_ENABLE_HOTT

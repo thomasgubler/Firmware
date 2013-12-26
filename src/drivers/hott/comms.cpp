@@ -55,6 +55,53 @@
 #endif
 static const int ERROR = -1;
 
+
+int
+open_uart(const char *device)
+{
+	/* baud rate */
+	static const speed_t speed = B19200;
+
+	/* open uart */
+	const int uart = open(device, O_RDWR | O_NOCTTY);
+
+	if (uart < 0) {
+		err(1, "Error opening port: %s", device);
+	}
+
+	/* Back up the original uart configuration to restore it after exit */
+	int termios_state;
+	struct termios uart_config_original;
+	if ((termios_state = tcgetattr(uart, &uart_config_original)) < 0) {
+		close(uart);
+		err(1, "Error getting baudrate / termios config for %s: %d", device, termios_state);
+	}
+
+	/* Fill the struct for the new configuration */
+	struct termios uart_config;
+	tcgetattr(uart, &uart_config);
+
+	/* Clear ONLCR flag (which appends a CR for every LF) */
+	uart_config.c_oflag &= ~ONLCR;
+
+	/* Set baud rate */
+	if (cfsetispeed(&uart_config, speed) < 0 || cfsetospeed(&uart_config, speed) < 0) {
+		close(uart);
+		err(1, "Error setting baudrate / termios config for %s: %d (cfsetispeed, cfsetospeed)",
+			 device, termios_state);
+	}
+
+	if ((termios_state = tcsetattr(uart, TCSANOW, &uart_config)) < 0) {
+		close(uart);
+		err(1, "Error setting baudrate / termios config for %s (tcsetattr)", device);
+	}
+
+	/* Activate single wire mode */
+	ioctl(uart, TIOCSSINGLEWIRE, SER_SINGLEWIRE_ENABLED);
+
+	return uart;
+}
+
 int
 send_poll(int uart, uint8_t *buffer, size_t size)
 {
@@ -69,6 +116,7 @@ send_poll(int uart, uint8_t *buffer, size_t size)
 	/* TODO: Fix this!! */
 	uint8_t dummy[size];
 	read(uart, &dummy, size);
+//	printf("buffer: %x, %x; dummy: %x, %x", buffer[0], buffer[1],  dummy[0], dummy[1]);
 
 	return OK;
 }

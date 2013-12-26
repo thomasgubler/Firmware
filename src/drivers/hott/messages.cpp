@@ -68,7 +68,7 @@ build_gam_request(uint8_t *buffer, size_t *size)
 void
 build_vario_request(uint8_t *buffer, size_t *size)
 {
-	struct gam_module_poll_msg msg;
+	struct vario_module_poll_msg msg;
 	*size = sizeof(msg);
 	memset(&msg, 0, *size);
 
