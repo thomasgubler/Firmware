@@ -45,6 +45,7 @@
 
 #include <fcntl.h>
 #include <nuttx/config.h>
+#include <nuttx/arch.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -150,11 +151,16 @@ void hott_vario_tick(void)
 
 
 	uint8_t buffer_out = 1;
+	char buffer_sep = 'A';
 	uint8_t buffer_in = 0;
 	int write_res = write(uart, &buffer_out, 1);
+	up_udelay(800);
 	int read_res = read(uart, &buffer_in, 1);
-	write_res = write(uart, &write_res, sizeof(write_res));
-	write_res = write(uart, &read_res, sizeof(read_res));
-
+	(void)write(uart, &buffer_sep, 1);
+	(void)write(uart, &buffer_in, 1);
+	up_udelay(1300);
+	read_res = read(uart, &buffer_in, 1);
+	read_res = read(uart, &buffer_in, 1);
+	up_udelay(10000);
 
 }
