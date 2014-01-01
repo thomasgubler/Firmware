@@ -90,16 +90,18 @@ static char msg[NUM_MSG][40];
 void
 isr_debug(uint8_t level, const char *fmt, ...)
 {
-//	if (level > r_page_setup[PX4IO_P_SETUP_SET_DEBUG]) {
-//		return;
-//	}
-//	va_list ap;
-//	va_start(ap, fmt);
-//	vsnprintf(msg[msg_next_in], sizeof(msg[0]), fmt, ap);
-//	va_end(ap);
-//	msg_next_in = (msg_next_in+1) % NUM_MSG;
-//	msg_counter++;
-	return; //xxx
+#ifndef PX4IO_ENABLE_HOTT
+	if (level > r_page_setup[PX4IO_P_SETUP_SET_DEBUG]) {
+		return;
+	}
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(msg[msg_next_in], sizeof(msg[0]), fmt, ap);
+	va_end(ap);
+	msg_next_in = (msg_next_in+1) % NUM_MSG;
+	msg_counter++;
+#endif
+	return;
 }
 
 /*
@@ -166,7 +168,7 @@ user_start(int argc, char *argv[])
 #endif
 
 	/* print some startup info */
-	lowsyslog("\nPX4IO: starting\n");
+	isr_debug(1, "\nPX4IO: starting\n");
 
 	/* default all the LEDs to off while we start */
 	LED_AMBER(false);
@@ -208,7 +210,7 @@ user_start(int argc, char *argv[])
 	perf_counter_t loop_perf = perf_alloc(PC_INTERVAL, "loop");
 
 	struct mallinfo minfo = mallinfo();
-	lowsyslog("MEM: free %u, largest %u\n", minfo.mxordblk, minfo.fordblks);
+	isr_debug(1, "MEM: free %u, largest %u\n", minfo.mxordblk, minfo.fordblks);
 
 	/* initialize PWM limit lib */
 //	pwm_limit_init(&pwm_limit);
