@@ -1,9 +1,7 @@
 /****************************************************************************
  *
- *   Copyright (C) 2012 PX4 Development Team. All rights reserved.
+ *   Copyright (C) 2008-2012 PX4 Development Team. All rights reserved.
  *   Author: @author Thomas Gubler <thomasgubler@student.ethz.ch>
- *           @author Julian Oes <joes@student.ethz.ch>
- *           @author Lorenz Meier <lm@inf.ethz.ch>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,53 +32,51 @@
  *
  ****************************************************************************/
 
-/**
- * @file vehicle_global_position_setpoint.h
- * Definition of the global WGS84 position setpoint uORB topic.
- */
-
-#ifndef TOPIC_VEHICLE_GLOBAL_POSITION_SETPOINT_H_
-#define TOPIC_VEHICLE_GLOBAL_POSITION_SETPOINT_H_
-
-#include <stdint.h>
-#include <stdbool.h>
-#include "../uORB.h"
-#include "mission.h"
-
-/**
- * @addtogroup topics
- * @{
- */
-
-/**
- * Global position setpoint in WGS84 coordinates.
+/*
+ * @file: landingslope.cpp
  *
- * This is the position the MAV is heading towards. If it of type loiter,
- * the MAV is circling around it with the given loiter radius in meters.
  */
-struct vehicle_global_position_setpoint_s
+
+#include "landingslope.h"
+
+#include <nuttx/config.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <math.h>
+#include <unistd.h>
+#include <mathlib/mathlib.h>
+
+void Landingslope::update(float landing_slope_angle_rad,
+		float flare_relative_alt,
+		float motor_lim_horizontal_distance,
+		float H1_virt)
 {
-	bool altitude_is_relative;	/**< true if altitude is relative from start point	*/
-	int32_t lat;			/**< latitude in degrees * 1E7				*/
-	int32_t lon;			/**< longitude in degrees * 1E7				*/
-	float altitude;			/**< altitude in meters					*/
-	float yaw;			/**< in radians NED -PI..+PI 				*/
-	float loiter_radius;		/**< loiter radius in meters, 0 for a VTOL to hover     */
-	int8_t loiter_direction;	/**< 1: positive / clockwise, -1, negative.		*/
-	enum NAV_CMD nav_cmd;		/**< true if loitering is enabled			*/
-	float param1;
-	float param2;
-	float param3;
-	float param4;
-	float turn_distance_xy;		/**< The distance on the plane which will mark this as reached */
-	float turn_distance_z;		/**< The distance in Z direction which will mark this as reached */
-};
 
-/**
- * @}
- */
+	_landing_slope_angle_rad = landing_slope_angle_rad;
+	_flare_relative_alt = flare_relative_alt;
+	_motor_lim_horizontal_distance = motor_lim_horizontal_distance;
+	_H1_virt = H1_virt;
 
-/* register this as object request broker structure */
-ORB_DECLARE(vehicle_global_position_setpoint);
+	calculateSlopeValues();
+}
 
-#endif
+void Landingslope::calculateSlopeValues()
+{
+	_H0 =  _flare_relative_alt + _H1_virt;
+	_d1 = _flare_relative_alt/tanf(_landing_slope_angle_rad);
+	_flare_constant = (_H0 * _d1)/_flare_relative_alt;
+	_flare_length = - logf(_H1_virt/_H0) * _flare_constant;
+	_horizontal_slope_displacement = (_flare_length - _d1);
+}
+
+float Landingslope::getLandingSlopeAbsoluteAltitude(float wp_distance, float wp_altitude)
+{
+	return Landingslope::getLandingSlopeAbsoluteAltitude(wp_distance, wp_altitude, _horizontal_slope_displacement, _landing_slope_angle_rad);
+}
+
+float Landingslope::getFlareCurveAltitude(float wp_landing_distance, float wp_landing_altitude)
+{
+	return wp_landing_altitude + _H0 * expf(-math::max(0.0f, _flare_length - wp_landing_distance)/_flare_constant) - _H1_virt;
+
+}
+

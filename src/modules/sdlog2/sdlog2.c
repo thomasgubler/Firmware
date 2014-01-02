@@ -72,7 +72,7 @@
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
 #include <uORB/topics/vehicle_global_position.h>
-#include <uORB/topics/vehicle_global_position_setpoint.h>
+#include <uORB/topics/mission_item_triplet.h>
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/vehicle_vicon_position.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
@@ -694,7 +694,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct vehicle_local_position_s local_pos;
 		struct vehicle_local_position_setpoint_s local_pos_sp;
 		struct vehicle_global_position_s global_pos;
-		struct vehicle_global_position_setpoint_s global_pos_sp;
+		struct mission_item_triplet_s triplet;
 		struct vehicle_gps_position_s gps_pos;
 		struct vehicle_vicon_position_s vicon_pos;
 		struct optical_flow_s flow;
@@ -720,7 +720,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		int local_pos_sub;
 		int local_pos_sp_sub;
 		int global_pos_sub;
-		int global_pos_sp_sub;
+		int triplet_sub;
 		int gps_pos_sub;
 		int vicon_pos_sub;
 		int flow_sub;
@@ -844,8 +844,8 @@ int sdlog2_thread_main(int argc, char *argv[])
 	fdsc_count++;
 
 	/* --- GLOBAL POSITION SETPOINT--- */
-	subs.global_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_global_position_setpoint));
-	fds[fdsc_count].fd = subs.global_pos_sp_sub;
+	subs.triplet_sub = orb_subscribe(ORB_ID(mission_item_triplet));
+	fds[fdsc_count].fd = subs.triplet_sub;
 	fds[fdsc_count].events = POLLIN;
 	fdsc_count++;
 
@@ -979,7 +979,8 @@ int sdlog2_thread_main(int argc, char *argv[])
 				// Don't orb_copy, it's already done few lines above
 				log_msg.msg_type = LOG_STAT_MSG;
 				log_msg.body.log_STAT.main_state = (uint8_t) buf_status.main_state;
-				log_msg.body.log_STAT.navigation_state = (uint8_t) buf_status.navigation_state;
+				// TODO use control_mode topic
+				//log_msg.body.log_STAT.navigation_state = (uint8_t) buf_status.navigation_state;
 				log_msg.body.log_STAT.arming_state = (uint8_t) buf_status.arming_state;
 				log_msg.body.log_STAT.battery_voltage = buf_status.battery_voltage;
 				log_msg.body.log_STAT.battery_current = buf_status.battery_current;
@@ -1160,20 +1161,19 @@ int sdlog2_thread_main(int argc, char *argv[])
 
 			/* --- GLOBAL POSITION SETPOINT --- */
 			if (fds[ifds++].revents & POLLIN) {
-				orb_copy(ORB_ID(vehicle_global_position_setpoint), subs.global_pos_sp_sub, &buf.global_pos_sp);
+				orb_copy(ORB_ID(mission_item_triplet), subs.triplet_sub, &buf.triplet);
 				log_msg.msg_type = LOG_GPSP_MSG;
-				log_msg.body.log_GPSP.altitude_is_relative = buf.global_pos_sp.altitude_is_relative;
-				log_msg.body.log_GPSP.lat = buf.global_pos_sp.lat;
-				log_msg.body.log_GPSP.lon = buf.global_pos_sp.lon;
-				log_msg.body.log_GPSP.altitude = buf.global_pos_sp.altitude;
-				log_msg.body.log_GPSP.yaw = buf.global_pos_sp.yaw;
-				log_msg.body.log_GPSP.loiter_radius = buf.global_pos_sp.loiter_radius;
-				log_msg.body.log_GPSP.loiter_direction = buf.global_pos_sp.loiter_direction;
-				log_msg.body.log_GPSP.nav_cmd = buf.global_pos_sp.nav_cmd;
-				log_msg.body.log_GPSP.param1 = buf.global_pos_sp.param1;
-				log_msg.body.log_GPSP.param2 = buf.global_pos_sp.param2;
-				log_msg.body.log_GPSP.param3 = buf.global_pos_sp.param3;
-				log_msg.body.log_GPSP.param4 = buf.global_pos_sp.param4;
+				log_msg.body.log_GPSP.altitude_is_relative = buf.triplet.current.altitude_is_relative;
+				log_msg.body.log_GPSP.lat = (int32_t)(buf.triplet.current.lat * 1e7d);
+				log_msg.body.log_GPSP.lon = (int32_t)(buf.triplet.current.lon * 1e7d);
+				log_msg.body.log_GPSP.altitude = buf.triplet.current.altitude;
+				log_msg.body.log_GPSP.yaw = buf.triplet.current.yaw;
+				log_msg.body.log_GPSP.nav_cmd = buf.triplet.current.nav_cmd;				
+				log_msg.body.log_GPSP.loiter_radius = buf.triplet.current.loiter_radius;
+				log_msg.body.log_GPSP.loiter_direction = buf.triplet.current.loiter_direction;
+				log_msg.body.log_GPSP.acceptance_radius = buf.triplet.current.acceptance_radius;
+				log_msg.body.log_GPSP.time_inside = buf.triplet.current.time_inside;
+				log_msg.body.log_GPSP.pitch_min = buf.triplet.current.pitch_min;
 				LOGBUFFER_WRITE_AND_COUNT(GPSP);
 			}
 
@@ -1203,6 +1203,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 				log_msg.msg_type = LOG_RC_MSG;
 				/* Copy only the first 8 channels of 14 */
 				memcpy(log_msg.body.log_RC.channel, buf.rc.chan, sizeof(log_msg.body.log_RC.channel));
+				log_msg.body.log_RC.channel_count = buf.rc.chan_count;
 				LOGBUFFER_WRITE_AND_COUNT(RC);
 			}
 

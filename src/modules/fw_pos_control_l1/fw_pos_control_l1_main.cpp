@@ -49,6 +49,7 @@
  * More details and acknowledgements in the referenced library headers.
  *
  * @author Lorenz Meier <lm@inf.ethz.ch>
+ * @author Thomas Gubler <thomasgubler@gmail.com>
  */
 
 #include <nuttx/config.h>
@@ -87,6 +88,7 @@
 
 #include <ecl/l1/ecl_l1_pos_controller.h>
 #include <external_lgpl/tecs/tecs.h>
+#include "landingslope.h"
 
 /**
  * L1 control app start / stop handling function
@@ -168,6 +170,9 @@ private:
 	bool land_motor_lim;
 	bool land_onslope;
 
+	/* Landingslope object */
+	Landingslope landingslope;
+
 	float flare_curve_alt_last;
 	/* heading hold */
 	float target_bearing;
@@ -223,6 +228,7 @@ private:
 		float land_H1_virt;
 		float land_flare_alt_relative;
 		float land_thrust_lim_horizontal_distance;
+		float land_heading_hold_horizontal_distance;
 
 	}		_parameters;			/**< local copies of interesting parameters */
 
@@ -267,6 +273,7 @@ private:
 		param_t land_H1_virt;
 		param_t land_flare_alt_relative;
 		param_t land_thrust_lim_horizontal_distance;
+		param_t land_heading_hold_horizontal_distance;
 
 	}		_parameter_handles;		/**< handles for interesting parameters */
 
@@ -308,9 +315,9 @@ private:
 	void		vehicle_setpoint_poll();
 
 	/**
-	 * Get Altitude on the landing glide slope
+	 * Publish navigation capabilities
 	 */
-	float getLandingSlopeAbsoluteAltitude(float wp_distance, float wp_altitude, float landing_slope_angle_rad, float horizontal_displacement);
+	void navigation_capabilities_publish();
 
 	/**
 	 * Control position.
@@ -416,6 +423,7 @@ FixedwingPositionControl::FixedwingPositionControl() :
 	_parameter_handles.land_H1_virt = param_find("FW_LND_HVIRT");
 	_parameter_handles.land_flare_alt_relative = param_find("FW_LND_FLALT");
 	_parameter_handles.land_thrust_lim_horizontal_distance = param_find("FW_LND_TLDIST");
+	_parameter_handles.land_heading_hold_horizontal_distance = param_find("FW_LND_HHDIST");
 
 	_parameter_handles.time_const = 			param_find("FW_T_TIME_CONST");
 	_parameter_handles.min_sink_rate = 			param_find("FW_T_SINK_MIN");
@@ -504,6 +512,7 @@ FixedwingPositionControl::parameters_update()
 	param_get(_parameter_handles.land_H1_virt, &(_parameters.land_H1_virt));
 	param_get(_parameter_handles.land_flare_alt_relative, &(_parameters.land_flare_alt_relative));
 	param_get(_parameter_handles.land_thrust_lim_horizontal_distance, &(_parameters.land_thrust_lim_horizontal_distance));
+	param_get(_parameter_handles.land_heading_hold_horizontal_distance, &(_parameters.land_heading_hold_horizontal_distance));
 
 	_l1_control.set_l1_damping(_parameters.l1_damping);
 	_l1_control.set_l1_period(_parameters.l1_period);
@@ -535,6 +544,15 @@ FixedwingPositionControl::parameters_update()
 		warnx("error: airspeed parameters invalid");
 		return 1;
 	}
+
+	/* Update the landing slope */
+	landingslope.update(math::radians(_parameters.land_slope_angle), _parameters.land_flare_alt_relative, _parameters.land_thrust_lim_horizontal_distance, _parameters.land_H1_virt);
+
+	/* Update and publish the navigation capabilities */
+	_nav_capabilities.landing_slope_angle_rad = landingslope.landing_slope_angle_rad();
+	_nav_capabilities.landing_horizontal_slope_displacement = landingslope.horizontal_slope_displacement();
+	_nav_capabilities.landing_flare_length = landingslope.flare_length();
+	navigation_capabilities_publish();
 
 	return OK;
 }
@@ -707,9 +725,13 @@ FixedwingPositionControl::calculate_gndspeed_undershoot(const math::Vector2f &cu
 	}
 }
 
-float FixedwingPositionControl::getLandingSlopeAbsoluteAltitude(float wp_distance, float wp_altitude, float landing_slope_angle_rad, float horizontal_displacement)
+void FixedwingPositionControl::navigation_capabilities_publish()
 {
-	return (wp_distance - horizontal_displacement) * tanf(landing_slope_angle_rad) + wp_altitude; //flare_relative_alt is negative
+	if (_nav_capabilities_pub > 0) {
+		orb_publish(ORB_ID(navigation_capabilities), _nav_capabilities_pub, &_nav_capabilities);
+	} else {
+		_nav_capabilities_pub = orb_advertise(ORB_ID(navigation_capabilities), &_nav_capabilities);
+	}
 }
 
 bool
@@ -805,19 +827,18 @@ FixedwingPositionControl::control_position(const math::Vector2f &current_positio
 			/* switch to heading hold for the last meters, continue heading hold after */
 			float wp_distance = get_distance_to_next_waypoint(current_position.getX(), current_position.getY(), curr_wp.getX(), curr_wp.getY());
 			//warnx("wp dist: %d, alt err: %d, noret: %s", (int)wp_distance, (int)altitude_error, (land_noreturn) ? "YES" : "NO");
-			const float heading_hold_distance = 15.0f;
-			if (wp_distance < heading_hold_distance || land_noreturn_horizontal) {
+			if (wp_distance < _parameters.land_heading_hold_horizontal_distance || land_noreturn_horizontal) {
 
 				/* heading hold, along the line connecting this and the last waypoint */
-				
 
-				// if (mission_item_triplet.previous_valid) {
-				// 	target_bearing = get_bearing_to_next_waypoint(prev_wp.getX(), prev_wp.getY(), next_wp.getX(), next_wp.getY());
-				// } else {
-
-				if (!land_noreturn_horizontal) //set target_bearing in first occurrence
-					target_bearing = _att.yaw;
-				//}
+				if (!land_noreturn_horizontal) {//set target_bearing in first occurrence
+					if (mission_item_triplet.previous_valid) {
+						target_bearing = get_bearing_to_next_waypoint(prev_wp.getX(), prev_wp.getY(), curr_wp.getX(), curr_wp.getY());
+					} else {
+						target_bearing = _att.yaw;
+					}
+					mavlink_log_info(_mavlink_fd, "#audio: Landing, heading hold");
+				}
 
 //					warnx("NORET: %d, target_bearing: %d, yaw: %d", (int)land_noreturn_horizontal, (int)math::degrees(target_bearing), (int)math::degrees(_att.yaw));
 
@@ -848,26 +869,18 @@ FixedwingPositionControl::control_position(const math::Vector2f &current_positio
 			/* apply minimum pitch (flare) and limit roll if close to touch down, altitude error is negative (going down) */
 			// XXX this could make a great param
 
-			float flare_angle_rad = -math::radians(5.0f);//math::radians(mission_item_triplet.current.param1)
-			float land_pitch_min = math::radians(5.0f);
+			float flare_pitch_angle_rad = -math::radians(5.0f);//math::radians(mission_item_triplet.current.param1)
 			float throttle_land = _parameters.throttle_min + (_parameters.throttle_max - _parameters.throttle_min) * 0.1f;
 			float airspeed_land = 1.3f * _parameters.airspeed_min;
 			float airspeed_approach = 1.3f * _parameters.airspeed_min;
 
-			float landing_slope_angle_rad = math::radians(_parameters.land_slope_angle);
-			float flare_relative_alt = _parameters.land_flare_alt_relative;
-			float motor_lim_horizontal_distance = _parameters.land_thrust_lim_horizontal_distance;//be generous here as we currently have to rely on the user input for the waypoint
 			float L_wp_distance = get_distance_to_next_waypoint(prev_wp.getX(), prev_wp.getY(), curr_wp.getX(), curr_wp.getY()) * _parameters.land_slope_length;
-			float H1 = _parameters.land_H1_virt;
-			float H0 = flare_relative_alt + H1;
-			float d1 = flare_relative_alt/tanf(landing_slope_angle_rad);
-			float flare_constant = (H0 * d1)/flare_relative_alt;//-flare_length/(logf(H1/H0));
-			float flare_length = - logf(H1/H0) * flare_constant;//d1+20.0f;//-logf(0.01f/flare_relative_alt);
-			float horizontal_slope_displacement = (flare_length - d1);
-			float L_altitude = getLandingSlopeAbsoluteAltitude(L_wp_distance, _mission_item_triplet.current.altitude, landing_slope_angle_rad, horizontal_slope_displacement);
-			float landing_slope_alt_desired = getLandingSlopeAbsoluteAltitude(wp_distance, _mission_item_triplet.current.altitude, landing_slope_angle_rad, horizontal_slope_displacement);
+			float L_altitude = landingslope.getLandingSlopeAbsoluteAltitude(L_wp_distance, _mission_item_triplet.current.altitude);//getLandingSlopeAbsoluteAltitude(L_wp_distance, _mission_item_triplet.current.altitude, landing_slope_angle_rad, horizontal_slope_displacement);
+			float landing_slope_alt_desired = landingslope.getLandingSlopeAbsoluteAltitude(wp_distance, _mission_item_triplet.current.altitude);//getLandingSlopeAbsoluteAltitude(wp_distance, _mission_item_triplet.current.altitude, landing_slope_angle_rad, horizontal_slope_displacement);
 
-			if ( (_global_pos.alt < _mission_item_triplet.current.altitude + flare_relative_alt) || land_noreturn_vertical) {  //checking for land_noreturn to avoid unwanted climb out
+
+
+			if ( (_global_pos.alt < _mission_item_triplet.current.altitude + landingslope.flare_relative_alt()) || land_noreturn_vertical) {  //checking for land_noreturn to avoid unwanted climb out
 
 				/* land with minimal speed */
 
@@ -877,7 +890,7 @@ FixedwingPositionControl::control_position(const math::Vector2f &current_positio
 				/* kill the throttle if param requests it */
 				throttle_max = _parameters.throttle_max;
 
-				 if (wp_distance < motor_lim_horizontal_distance || land_motor_lim) {
+				 if (wp_distance < landingslope.motor_lim_horizontal_distance() || land_motor_lim) {
 					throttle_max = math::min(throttle_max, _parameters.throttle_land_max);
 					if (!land_motor_lim) {
 						land_motor_lim  = true;
@@ -886,7 +899,7 @@ FixedwingPositionControl::control_position(const math::Vector2f &current_positio
 
 				 }
 
-				float flare_curve_alt =   _mission_item_triplet.current.altitude + H0 * expf(-math::max(0.0f, flare_length - wp_distance)/flare_constant) - H1;
+				float flare_curve_alt = landingslope.getFlareCurveAltitude(wp_distance, _mission_item_triplet.current.altitude);
 
 				/* avoid climbout */
 				if (flare_curve_alt_last < flare_curve_alt && land_noreturn_vertical || land_stayonground)
@@ -897,9 +910,9 @@ FixedwingPositionControl::control_position(const math::Vector2f &current_positio
 
 				_tecs.update_pitch_throttle(_R_nb, _att.pitch, _global_pos.alt, flare_curve_alt, calculate_target_airspeed(airspeed_land),
 												    _airspeed.indicated_airspeed_m_s, eas2tas,
-												    false, flare_angle_rad,
+												    false, flare_pitch_angle_rad,
 												    0.0f, throttle_max, throttle_land,
-												    flare_angle_rad,  math::radians(15.0f));
+												    flare_pitch_angle_rad,  math::radians(15.0f));
 
 				if (!land_noreturn_vertical) {
 					mavlink_log_info(_mavlink_fd, "#audio: Landing, flaring");
@@ -914,7 +927,7 @@ FixedwingPositionControl::control_position(const math::Vector2f &current_positio
 				/* minimize speed to approach speed, stay on landing slope */
 				_tecs.update_pitch_throttle(_R_nb, _att.pitch, _global_pos.alt, landing_slope_alt_desired, calculate_target_airspeed(airspeed_approach),
 							    _airspeed.indicated_airspeed_m_s, eas2tas,
-							    false, flare_angle_rad,
+							    false, flare_pitch_angle_rad,
 							    _parameters.throttle_min, _parameters.throttle_max, _parameters.throttle_cruise,
 							    math::radians(_parameters.pitch_limit_min), math::radians(_parameters.pitch_limit_max));
 				//warnx("Landing: stay on slope, alt_desired: %.1f (wp_distance: %.1f), calculate_target_airspeed(airspeed_land) %.1f, horizontal_slope_displacement %.1f, d1 %.1f, flare_length %.1f", landing_slope_alt_desired, wp_distance, calculate_target_airspeed(airspeed_land), horizontal_slope_displacement, d1, flare_length);
@@ -961,7 +974,7 @@ FixedwingPositionControl::control_position(const math::Vector2f &current_positio
 				/* enforce a minimum of 10 degrees pitch up on takeoff, or take parameter */
 				_tecs.update_pitch_throttle(_R_nb, _att.pitch, _global_pos.alt, _mission_item_triplet.current.altitude, calculate_target_airspeed(1.3f * _parameters.airspeed_min),
 							    _airspeed.indicated_airspeed_m_s, eas2tas,
-							    true, math::max(math::radians(mission_item_triplet.current.radius), math::radians(10.0f)),
+							    true, math::max(math::radians(mission_item_triplet.current.pitch_min), math::radians(10.0f)),
 							    _parameters.throttle_min, _parameters.throttle_max, _parameters.throttle_cruise,
 							    math::radians(_parameters.pitch_limit_min), math::radians(_parameters.pitch_limit_max));
 
@@ -1217,7 +1230,7 @@ FixedwingPositionControl::task_main()
 				}
 
 				/* XXX check if radius makes sense here */
-				float turn_distance = _l1_control.switch_distance(_mission_item_triplet.current.radius);
+				float turn_distance = _l1_control.switch_distance(_mission_item_triplet.current.acceptance_radius);
 
 				/* lazily publish navigation capabilities */
 				if (turn_distance != _nav_capabilities.turn_distance && turn_distance > 0) {
@@ -1225,11 +1238,8 @@ FixedwingPositionControl::task_main()
 					/* set new turn distance */
 					_nav_capabilities.turn_distance = turn_distance;
 
-					if (_nav_capabilities_pub > 0) {
-						orb_publish(ORB_ID(navigation_capabilities), _nav_capabilities_pub, &_nav_capabilities);
-					} else {
-						_nav_capabilities_pub = orb_advertise(ORB_ID(navigation_capabilities), &_nav_capabilities);
-					}
+					navigation_capabilities_publish();
+
 				}
 
 			}

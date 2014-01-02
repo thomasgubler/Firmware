@@ -1,7 +1,8 @@
 /****************************************************************************
  *
- *   Copyright (C) 2012 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2013 PX4 Development Team. All rights reserved.
  *   Author: @author Lorenz Meier <lm@inf.ethz.ch>
+ *           @author Thomas Gubler <thomasgubler@student.ethz.ch>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,22 +32,51 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  ****************************************************************************/
-
 /**
- * @file missionlib.h
- * MAVLink mission helper library
+ * @file mission_feasibility_checker.h
+ * Provides checks if mission is feasible given the navigation capabilities
  */
+#ifndef MISSION_FEASIBILITY_CHECKER_H_
+#define MISSION_FEASIBILITY_CHECKER_H_
 
-#pragma once
+#include <unistd.h>
+#include <uORB/topics/mission.h>
+#include <uORB/topics/navigation_capabilities.h>
+#include <dataman/dataman.h>
 
-#include "mavlink_bridge_header.h"
 
-//extern void	mavlink_wpm_send_message(mavlink_message_t *msg);
-//extern void	mavlink_wpm_send_gcs_string(const char *string);
-//extern uint64_t	mavlink_wpm_get_system_timestamp(void);
-extern int	mavlink_missionlib_send_message(mavlink_message_t *msg);
-extern int	mavlink_missionlib_send_gcs_string(const char *string);
-extern uint64_t	mavlink_missionlib_get_system_timestamp(void);
-extern void	mavlink_missionlib_current_waypoint_changed(uint16_t index, float param1,
-		float param2, float param3, float param4, float param5_lat_x,
-		float param6_lon_y, float param7_alt_z, uint8_t frame, uint16_t command);
+class MissionFeasibilityChecker
+{
+private:
+	int		_mavlink_fd;
+
+	int _capabilities_sub;
+	struct navigation_capabilities_s _nav_caps;
+
+	bool _initDone;
+	void init();
+
+	/* Checks for all airframes */
+	bool checkGeofence(dm_item_t dm_current, size_t nItems);
+
+	/* Checks specific to fixedwing airframes */
+	bool checkMissionFeasibleFixedwing(dm_item_t dm_current, size_t nItems);
+	bool checkFixedWingLanding(dm_item_t dm_current, size_t nItems);
+	void updateNavigationCapabilities();
+
+	/* Checks specific to rotarywing airframes */
+	bool checkMissionFeasibleRotarywing(dm_item_t dm_current, size_t nItems);
+public:
+
+	MissionFeasibilityChecker();
+	~MissionFeasibilityChecker() {}
+
+	/*
+	 * Returns true if mission is feasible and false otherwise
+	 */
+	bool checkMissionFeasible(bool isRotarywing, dm_item_t dm_current, size_t nItems);
+
+};
+
+
+#endif /* MISSION_FEASIBILITY_CHECKER_H_ */
