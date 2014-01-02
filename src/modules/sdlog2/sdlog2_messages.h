@@ -247,6 +247,13 @@ struct log_GVSP_s {
 	float vz;
 };
 
+/* --- ALIO - ALTITUDE IO --- */
+#define LOG_ALIO_MSG 132
+struct log_ALIO_s {
+	char name[16];
+	float value;
+};
+
 /* --- TIME - TIME STAMP --- */
 #define LOG_TIME_MSG 129
 struct log_TIME_s {
@@ -290,6 +297,7 @@ static const struct log_format_s log_formats[] = {
 	LOG_FORMAT(GPSP, "BLLfffbBffff", "AltRel,Lat,Lon,Alt,Yaw,LoiterR,LoiterDir,NavCmd,P1,P2,P3,P4"),
 	LOG_FORMAT(ESC, "HBBBHHHHHHfH", "Counter,NumESC,Conn,N,Ver,Adr,Volt,Amp,RPM,Temp,SetP,SetPRAW"),
 	LOG_FORMAT(GVSP, "fff", "VX,VY,VZ"),
+	LOG_FORMAT(ALIO, "Nf", "Name,Value"),
 	/* system-level messages, ID >= 0x80 */
 	// FMT: don't write format of format message, it's useless
 	LOG_FORMAT(TIME, "Q", "StartTime"),

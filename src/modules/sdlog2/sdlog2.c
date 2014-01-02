@@ -82,6 +82,7 @@
 #include <uORB/topics/airspeed.h>
 #include <uORB/topics/rc_channels.h>
 #include <uORB/topics/esc_status.h>
+#include <uORB/topics/altitude_io.h>
 
 #include <systemlib/systemlib.h>
 #include <systemlib/param/param.h>
@@ -702,6 +703,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		struct airspeed_s airspeed;
 		struct esc_status_s esc;
 		struct vehicle_global_velocity_setpoint_s global_vel_sp;
+		struct altitude_io_s altitude_io;
 	} buf;
 
 	memset(&buf, 0, sizeof(buf));
@@ -726,6 +728,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 		int airspeed_sub;
 		int esc_sub;
 		int global_vel_sp_sub;
+		int altitude_io_sub;
 	} subs;
 
 	/* log message buffer: header + body */
@@ -752,6 +755,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_GPSP_s log_GPSP;
 			struct log_ESC_s log_ESC;
 			struct log_GVSP_s log_GVSP;
+			struct log_ALIO_s log_ALIO;
 		} body;
 	} log_msg = {
 		LOG_PACKET_HEADER_INIT(0)
@@ -761,7 +765,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 
 	/* --- IMPORTANT: DEFINE NUMBER OF ORB STRUCTS TO WAIT FOR HERE --- */
 	/* number of subscriptions */
-	const ssize_t fdsc = 19;
+	const ssize_t fdsc = 20;
 	/* sanity check variable and index */
 	ssize_t fdsc_count = 0;
 	/* file descriptors to wait for */
@@ -878,6 +882,12 @@ int sdlog2_thread_main(int argc, char *argv[])
 	/* --- GLOBAL VELOCITY SETPOINT --- */
 	subs.global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
 	fds[fdsc_count].fd = subs.global_vel_sp_sub;
+	fds[fdsc_count].events = POLLIN;
+	fdsc_count++;
+
+	/* --- ALTITUDE IO --- */
+	subs.altitude_io_sub = orb_subscribe(ORB_ID(altitude_io));
+	fds[fdsc_count].fd = subs.altitude_io_sub;
 	fds[fdsc_count].events = POLLIN;
 	fdsc_count++;
 
@@ -1235,6 +1245,14 @@ int sdlog2_thread_main(int argc, char *argv[])
 				log_msg.body.log_GVSP.vy = buf.global_vel_sp.vy;
 				log_msg.body.log_GVSP.vz = buf.global_vel_sp.vz;
 				LOGBUFFER_WRITE_AND_COUNT(GVSP);
+			}
+
+			/* --- ALTITUDE IO --- */
+			if (fds[ifds++].revents & POLLIN) {
+				orb_copy(ORB_ID(altitude_io), subs.altitude_io_sub, &buf.altitude_io);
+				log_msg.msg_type = LOG_ALIO_MSG;
+				log_msg.body.log_ALIO.value = buf.altitude_io.altitude;
+				LOGBUFFER_WRITE_AND_COUNT(ALIO);
 			}
 
 			/* signal the other thread new data, but not yet unlock */
