@@ -82,6 +82,7 @@
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/servorail_status.h>
 #include <uORB/topics/parameter_update.h>
+#include <uORB/topics/altitude_io.h>
 
 #include <debug.h>
 
@@ -266,6 +267,7 @@ private:
 	orb_advert_t		_to_battery;		///< battery status / voltage
 	orb_advert_t		_to_servorail;		///< servorail status
 	orb_advert_t		_to_safety;		///< status of safety
+	orb_advert_t		_to_altitude;		///< altitude readings of an attached sensor
 
 	actuator_outputs_s	_outputs;		///<mixed outputs
 
@@ -487,6 +489,7 @@ PX4IO::PX4IO(device::Device *interface) :
 	_to_battery(0),
 	_to_servorail(0),
 	_to_safety(0),
+	_to_altitude(0),
 	_primary_pwm_device(false),
 	_battery_amp_per_volt(90.0f / 5.0f), // this matches the 3DR current sensor
 	_battery_amp_bias(0),
@@ -1496,11 +1499,23 @@ PX4IO::io_publish_hott_vario_alt()
 	ret = io_reg_get(PX4IO_PAGE_HOTT, PX4IO_P_HOTT_VARIO_COMM_DROP_COUNT, &vario_comm_drop_reg, 1);
 
 	/* convert from register format to signed integer */
-	int16_t altitude = REG_TO_SIGNED(altitude_reg);
+	int16_t altitude_raw = REG_TO_SIGNED(altitude_reg);
 
 //	warnx("io_publish_hott_vario_alt alt: %d, comm drops: %d", (int)altitude, (int)vario_comm_drop_reg);
 
-	//xxx: publish to uorb if needed
+	/*publish to uorb */
+	altitude_io_s altitude;
+	altitude.altitude = (float)altitude_raw;
+	altitude.timestamp = hrt_absolute_time();
+	altitude.error_count = (uint64_t)vario_comm_drop_reg;
+
+	/* lazily advertise on first publication */
+	if (_to_altitude == 0) {
+		_to_altitude = orb_advertise(ORB_ID(altitude_io), &altitude);
+
+	} else {
+		orb_publish(ORB_ID(altitude_io), _to_altitude, &altitude);
+	}
 
 	return OK;
 }

@@ -163,6 +163,9 @@ ORB_DEFINE(airspeed, struct airspeed_s);
 #include "topics/differential_pressure.h"
 ORB_DEFINE(differential_pressure, struct differential_pressure_s);
 
+#include "topics/altitude_io.h"
+ORB_DEFINE(altitude_io, struct altitude_io_s);
+
 #include "topics/subsystem_info.h"
 ORB_DEFINE(subsystem_info, struct subsystem_info_s);
 
