@@ -251,38 +251,38 @@ struct gps_module_msg {
 
 struct vario_module_msg {
 	/* #1 */
-        uint8_t start;			/**< Start byte	*/
-        uint8_t sensor_id;		/**< vario sensor id */
-        uint8_t warning_beeps;
-        uint8_t sensor_text_id;
-        uint8_t inverse_status;
+	uint8_t start;			/**< Start byte	*/
+	uint8_t sensor_id;		/**< vario sensor id */
+	uint8_t warning_beeps;
+	uint8_t sensor_text_id;
+	uint8_t inverse_status;
 
-        /* #6 */
-        uint8_t alt_L;
-        uint8_t alt_H;			/**< Lipo cell voltages. Not supported.	*/
-        uint8_t alt_max_L;
-        uint8_t alt_max_H;
-        uint8_t alt_min_L;
+	/* #6 */
+	uint8_t alt_L;
+	uint8_t alt_H;			/**< Lipo cell voltages. Not supported.	*/
+	uint8_t alt_max_L;
+	uint8_t alt_max_H;
+	uint8_t alt_min_L;
 
-        /* #11 */
-        uint8_t alt_min_H;
-        uint8_t resolution_mps_L;
-        uint8_t resolution_mps_H;
-        uint8_t resolution_mp3s_L;
-        uint8_t resolution_mp3s_H;
+	/* #11 */
+	uint8_t alt_min_H;
+	uint8_t resolution_mps_L;
+	uint8_t resolution_mps_H;
+	uint8_t resolution_mp3s_L;
+	uint8_t resolution_mp3s_H;
 
-        /* #16 */
-        uint8_t resolution_mp10s_L;
-        uint8_t resolution_mp10s_H;
+	/* #16 */
+	uint8_t resolution_mp10s_L;
+	uint8_t resolution_mp10s_H;
 
-        /* #18 to #41 */
-        uint8_t ASCII[24];
+	/* #18 to #41 */
+	uint8_t ASCII[24];
 
-        /* #42 */
-        uint8_t free;
-        uint8_t version;
-        uint8_t stop;			/**< Stop byte */
-        uint8_t checksum;		/**< Lower 8-bits of all bytes summed */
+	/* #42 */
+	uint8_t free;
+	uint8_t version;
+	uint8_t stop;			/**< Stop byte */
+	uint8_t checksum;		/**< Lower 8-bits of all bytes summed */
 };
 
 

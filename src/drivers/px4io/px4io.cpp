@@ -1492,10 +1492,13 @@ PX4IO::io_publish_hott_vario_alt()
 	uint16_t altitude_reg;
 	int ret = io_reg_get(PX4IO_PAGE_HOTT, PX4IO_P_HOTT_VARIO_ALT, &altitude_reg, 1);
 
+	uint16_t vario_comm_drop_reg;
+	ret = io_reg_get(PX4IO_PAGE_HOTT, PX4IO_P_HOTT_VARIO_COMM_DROP_COUNT, &vario_comm_drop_reg, 1);
+
 	/* convert from register format to signed integer */
 	int16_t altitude = REG_TO_SIGNED(altitude_reg);
 
-//	warnx("io_publish_hott_vario_alt alt: %d", (int)altitude);
+//	warnx("io_publish_hott_vario_alt alt: %d, comm drops: %d", (int)altitude, (int)vario_comm_drop_reg);
 
 	//xxx: publish to uorb if needed
 

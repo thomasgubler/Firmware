@@ -181,13 +181,13 @@ user_start(int argc, char *argv[])
 #endif
 
 	/* start the safety switch handler */
-//	safety_init();
+	safety_init();
 
 	/* configure the first 8 PWM outputs (i.e. all of them) */
-//	up_pwm_servo_init(0xff);
+	up_pwm_servo_init(0xff);
 
 	/* initialise the control inputs */
-//	controls_init();
+	controls_init();
 
 	/* initialise the hott sensors */
 #ifdef PX4IO_ENABLE_HOTT
@@ -195,7 +195,7 @@ user_start(int argc, char *argv[])
 #endif
 
 	/* start the FMU interface */
-//	interface_init();
+	interface_init();
 
 	/* add a performance counter for mixing */
 	perf_counter_t mixer_perf = perf_alloc(PC_ELAPSED, "mix");
@@ -213,7 +213,7 @@ user_start(int argc, char *argv[])
 	isr_debug(1, "MEM: free %u, largest %u\n", minfo.mxordblk, minfo.fordblks);
 
 	/* initialize PWM limit lib */
-//	pwm_limit_init(&pwm_limit);
+	pwm_limit_init(&pwm_limit);
 
 #if 0
 	/* not enough memory, lock down */
@@ -247,12 +247,12 @@ user_start(int argc, char *argv[])
 
 		/* kick the mixer */
 		perf_begin(mixer_perf);
-//		mixer_tick();
+		mixer_tick();
 		perf_end(mixer_perf);
 
 		/* kick the control inputs */
 		perf_begin(controls_perf);
-//		controls_tick();
+		controls_tick();
 		perf_end(controls_perf);
 
 #ifdef PX4IO_ENABLE_HOTT
@@ -262,10 +262,10 @@ user_start(int argc, char *argv[])
 		perf_end(hott_perf);
 #endif
 
-//                if ((hrt_absolute_time() - last_heartbeat_time) > 250*1000) {
-//                    last_heartbeat_time = hrt_absolute_time();
-//                    heartbeat_blink();
-//                }
+        if ((hrt_absolute_time() - last_heartbeat_time) > 250*1000) {
+            last_heartbeat_time = hrt_absolute_time();
+            heartbeat_blink();
+        }
 
 #if 0
 		/* check for debug activity */

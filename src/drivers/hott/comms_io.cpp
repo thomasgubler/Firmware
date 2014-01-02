@@ -61,8 +61,6 @@ static const int ERROR = -1;
 hrt_abstime hott_last_rx_time = 0;		/**< Timestamp when we last received */
 hrt_abstime hott_last_tx_time = 0;		/**< Timestamp when we last sent data */
 hrt_abstime hott_last_tx_byte_time = 0;	/**< Timestamp when we last sent a byte */
-unsigned hott_partial_frame_count = 0;	/**< Count of bytes received for current hott frame */
-unsigned hott_frame_drops = 0;		/**< Count of incomplete Hott frames */
 size_t poll_index = 0;
 
 int
@@ -117,22 +115,17 @@ open_uart(const char *device)
 
 
 int
-send_poll(int uart, uint8_t *buffer, size_t size, int16_t *debug)
+send_poll(int uart, uint8_t *buffer, size_t size)
 {
 
 	hrt_abstime	now;
 	now = hrt_absolute_time();
-	int a = 0;
 
 	if ( poll_index < size) {
-
-
-//	if ((now - hott_last_tx_time) > (hrt_abstime)1e6) {
 
 		if (poll_index < size) {
 			if (now - hott_last_tx_byte_time > (hrt_abstime)POST_WRITE_DELAY_IN_USECS) {
 				int write_res = write(uart, &buffer[poll_index], sizeof(buffer[poll_index]));
-				*debug = (int16_t)write_res;
 
 				/* Sleep before sending the next byte. */
 	//			usleep(POST_WRITE_DELAY_IN_USECS);
@@ -143,7 +136,6 @@ send_poll(int uart, uint8_t *buffer, size_t size, int16_t *debug)
 				if ( poll_index >= size) {
 					hott_last_tx_time = now;
 					poll_index = 0;
-					*debug = (int16_t)write_res;
 					return OK;
 				}
 
@@ -159,46 +151,35 @@ send_poll(int uart, uint8_t *buffer, size_t size, int16_t *debug)
 
 	}
 
-
-//	}
-
 	return ERROR;
 
 }
 
 int
-recv_data(int uart, uint8_t *buffer, size_t *size, uint8_t *id, int16_t *debug)
+recv_data(int uart, uint8_t *buffer, size_t *size, unsigned *hott_partial_frame_count)
 {
-	if (hott_input(uart, buffer, size, id, debug) ) {
+	if (hott_input(uart, buffer, size, hott_partial_frame_count) ) {
 		return OK;
 	}
 	return ERROR;
 }
 
-bool hott_input(int uart, uint8_t *buffer, size_t *size, uint8_t *id, int16_t *debug)
+bool hott_input(int uart, uint8_t *buffer, size_t *size, unsigned *hott_partial_frame_count)
 {
 	ssize_t		ret;
 	hrt_abstime	now;
 
 	now = hrt_absolute_time();
 
-	if ((now - hott_last_rx_time) > 2e6) {
-		if (hott_partial_frame_count > 0) {
-			hott_frame_drops++;
-			hott_partial_frame_count = 0;
-		}
-	}
-
-	if (hott_partial_frame_count >= MAX_MESSAGE_BUFFER_SIZE) {
-		hott_partial_frame_count = 0;
+	if (*hott_partial_frame_count >= MAX_MESSAGE_BUFFER_SIZE) {
+		*hott_partial_frame_count = 0;
 	}
 
 	/*
 	 * Fetch bytes, but no more than we would need to complete
 	 * the current hott frame.
 	 */
-	ret = read(uart, &buffer[hott_partial_frame_count], sizeof(struct vario_module_msg) - hott_partial_frame_count);
-	*debug = (int16_t)ret;
+	ret = read(uart, &buffer[*hott_partial_frame_count], sizeof(struct vario_module_msg) - *hott_partial_frame_count);
 
 	/* if the read failed for any reason, just give up here */
 	if (ret < 1)
@@ -209,21 +190,21 @@ bool hott_input(int uart, uint8_t *buffer, size_t *size, uint8_t *id, int16_t *d
 	/*
 	 * Add bytes to the current hott frame
 	 */
-	hott_partial_frame_count += ret;
+	*hott_partial_frame_count += ret;
 
 	/*
 	 * If we don't have a full hott  frame, return
 	 */
-//	if ( buffer[hott_partial_frame_count - 1] != STOP_BYTE) //(hott_partial_frame_count < sizeof(struct vario_module_msg)) ||
-//		return false;
-	if ( hott_partial_frame_count < sizeof(struct vario_module_msg))
+	if ( buffer[*hott_partial_frame_count - 1] != STOP_BYTE) //(hott_partial_frame_count < sizeof(struct vario_module_msg)) ||
 		return false;
+//	if ( *hott_partial_frame_count < sizeof(struct vario_module_msg))
+//		return false;
 
 	/*
 	 * Great, it looks like we might have a hott frame.  Go ahead and
 	 * decode it (done in hott_vario_tick).
 	 */
-	hott_partial_frame_count = 0;
+	*hott_partial_frame_count = 0;
 	return true;
 }
 

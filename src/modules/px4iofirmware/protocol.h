@@ -154,7 +154,8 @@
 
 /* external HOTT sensors */
 #define PX4IO_PAGE_HOTT		8
-#define PX4IO_P_HOTT_VARIO_ALT			0	/* 0..CONFIG_ACTUATOR_COUNT bitmaps of PWM rate groups */
+#define PX4IO_P_HOTT_VARIO_ALT				0	/* altitude */
+#define PX4IO_P_HOTT_VARIO_COMM_DROP_COUNT	1	/* communication drop/error counter */
 
 /* setup page */
 #define PX4IO_PAGE_SETUP		50
