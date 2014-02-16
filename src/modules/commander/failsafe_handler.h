@@ -71,8 +71,8 @@ private:
 	float rc_loss_timer;			/**< Counts the time of RC loss in seconds */
 	float data_link_loss_timer;		/**< Counts the time of data link loss in seconds */
 
-	transition_result_t handle_rc_loss_manual(vehicle_status_s* status, const actuator_armed_s& armed);
-	transition_result_t handle_rc_loss_auto(vehicle_status_s* status, const actuator_armed_s& armed);
+	transition_result_t handle_rc_loss_manual(vehicle_status_s* status);
+	transition_result_t handle_rc_loss_auto(vehicle_status_s* status);
 };
 
 #endif /* FAILSAFEHANDLER_H_ */

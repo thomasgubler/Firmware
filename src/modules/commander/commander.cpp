@@ -1610,6 +1610,7 @@ set_control_mode()
 
 		case MAIN_STATE_AUTO:
 			navigator_enabled = true;
+			break;
 
 		default:
 			break;
@@ -1617,11 +1618,11 @@ set_control_mode()
 
 		break;
 
-	case FAILSAFE_STATE_RTL:
-		navigator_enabled = true;
-		break;
-
-	case FAILSAFE_STATE_LAND:
+	case FAILSAFE_STATE_RC_LOSS_RTL:
+	case FAILSAFE_STATE_RC_LOSS_LAND:
+	case FAILSAFE_STATE_COMM_LOSS:
+	case FAILSAFE_STATE_GPS_LOSS:
+	case FAILSAFE_STATE_SOFT_GEOFENCE_VIOLATION:
 		navigator_enabled = true;
 		break;
 

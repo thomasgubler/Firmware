@@ -407,11 +407,11 @@ transition_result_t failsafe_state_transition(struct vehicle_status_s *status, f
 	} else {
 		switch (new_failsafe_state) {
 		case FAILSAFE_STATE_NORMAL:
-			/* always allowed (except from TERMINATION state) */
+			/* allowed from all states except from FAILSAFE_STATE_TERMINATION (which is excluded by the outer if statement) */
 			ret = TRANSITION_CHANGED;
 			break;
 
-		case FAILSAFE_STATE_RTL:
+		case FAILSAFE_STATE_RC_LOSS_RTL:
 
 			/* global position and home position required for RTL */
 			if (status->condition_global_position_valid && status->condition_home_position_valid) {
@@ -422,7 +422,7 @@ transition_result_t failsafe_state_transition(struct vehicle_status_s *status, f
 
 			break;
 
-		case FAILSAFE_STATE_LAND:
+		case FAILSAFE_STATE_RC_LOSS_LAND:
 
 			/* at least relative altitude estimate required for landing */
 			if (status->condition_local_altitude_valid || status->condition_global_position_valid) {
@@ -437,7 +437,23 @@ transition_result_t failsafe_state_transition(struct vehicle_status_s *status, f
 			/* always allowed */
 			ret = TRANSITION_CHANGED;
 			break;
+		case FAILSAFE_STATE_COMM_LOSS:
+			/* need global position */
+			if (status->condition_global_position_valid) {
+				//XXX set set_nav_state to NAV_STATE_COMMSLOSS which makes the navigator perform the actions for a comm loss
+				ret = TRANSITION_CHANGED;
+			}
+			break;
 
+		case FAILSAFE_STATE_GPS_LOSS:
+			if (status->condition_global_position_valid) {
+				//XXX set set_nav_state to NAV_STATE_GPSLOSS which makes the navigator perfrom the actions for a gps loss (loiter, wait, termination, or fly back)
+				ret = TRANSITION_CHANGED;
+			}
+			break;
+		case FAILSAFE_STATE_SOFT_GEOFENCE_VIOLATION:
+			//XXX: not implemented yet
+			break;
 		default:
 			break;
 		}

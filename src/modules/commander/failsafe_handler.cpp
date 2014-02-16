@@ -131,8 +131,8 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 		}
 
 		/* RC loss, only if failsafe on rc loss is enabled via a param */
-		if (failsafe_rc_auto_enabled.get() > 0) {
-			return handle_rc_loss_auto(status, armed);
+		if (rc_loss_threshold_reached && failsafe_rc_auto_enabled.get() > 0) {
+			return handle_rc_loss_auto(status);
 		}
 
 	} else if (status->main_state == MAIN_STATE_MANUAL || status->main_state == MAIN_STATE_SEATBELT || status->main_state == MAIN_STATE_EASY) {
@@ -141,18 +141,33 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 		if (rc_loss_threshold_reached)
 		{
 
-			return handle_rc_loss_manual(status, armed);
+			return handle_rc_loss_manual(status);
 		}
 
 		//XXX handle FPV comms loss
 	}
 
 
-//	/* recover from failsafe */ //XXX: think when to recover an when not
-//	if (status.failsafe_state != FAILSAFE_STATE_NORMAL) {
-//		transition_result_t failsafe_res = failsafe_state_transition(&status, FAILSAFE_STATE_NORMAL);
-//		return failsafe_res;
-//	}
+	/* recover from failsafe */
+	bool recovered = false;
+	if ( status->failsafe_state == FAILSAFE_STATE_RC_LOSS_RTL) {
+		if (!armed.armed || !rc_loss_threshold_reached)
+			recovered = true;
+	} else if ( status->failsafe_state == FAILSAFE_STATE_RC_LOSS_LAND) {
+		if (!armed.armed || !rc_loss_threshold_reached)
+			recovered = true;
+	} else if ( status->failsafe_state == FAILSAFE_STATE_COMM_LOSS) {
+		//XXX check if the issue is resolved
+	} else if ( status->failsafe_state == FAILSAFE_STATE_GPS_LOSS) {
+		//XXX check if the issue is resolved
+	} else if ( status->failsafe_state == FAILSAFE_STATE_SOFT_GEOFENCE_VIOLATION) {
+		//XXX check if the issue is resolved
+	}
+
+	if (recovered) {
+		transition_result_t failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_NORMAL);
+		return failsafe_res;
+	}
 
 	return TRANSITION_NOT_CHANGED;
 }
@@ -167,54 +182,38 @@ void FailsafeHandler::updateSubscriptions() {
 	_position_setpoint_triplet.update();
 }
 
-transition_result_t FailsafeHandler::handle_rc_loss_manual(vehicle_status_s* status, const actuator_armed_s& armed) {
+transition_result_t FailsafeHandler::handle_rc_loss_manual(vehicle_status_s* status) {
 	transition_result_t res = TRANSITION_NOT_CHANGED;
 
-	if (armed.armed) {
-		/* failsafe for manual modes */
-		res = failsafe_state_transition(status, FAILSAFE_STATE_RTL);
+	/* failsafe for manual modes */
+	res = failsafe_state_transition(status, FAILSAFE_STATE_RC_LOSS_RTL);
+
+	if (res == TRANSITION_DENIED) {
+		/* RTL not allowed (no global position estimate), try LAND */
+		res = failsafe_state_transition(status, FAILSAFE_STATE_RC_LOSS_LAND);
 
 		if (res == TRANSITION_DENIED) {
-			/* RTL not allowed (no global position estimate), try LAND */
-			res = failsafe_state_transition(status, FAILSAFE_STATE_LAND);
-
-			if (res == TRANSITION_DENIED) {
-				/* LAND not allowed, set TERMINATION state */
-				res = failsafe_state_transition(status, FAILSAFE_STATE_TERMINATION);
-			}
-		}
-
-	} else {
-		if (status->failsafe_state != FAILSAFE_STATE_NORMAL) {
-			/* reset failsafe when disarmed */
-			res = failsafe_state_transition(status, FAILSAFE_STATE_NORMAL);
+			/* LAND not allowed, set TERMINATION state */
+			res = failsafe_state_transition(status, FAILSAFE_STATE_TERMINATION);
 		}
 	}
 
 	return res;
 }
 
-transition_result_t FailsafeHandler::handle_rc_loss_auto(vehicle_status_s* status, const actuator_armed_s& armed) {
+transition_result_t FailsafeHandler::handle_rc_loss_auto(vehicle_status_s* status) {
 	transition_result_t res = TRANSITION_NOT_CHANGED;
 
-	if (armed.armed) {
+	/* check if AUTO mode still allowed */
+	res = main_state_transition(status, MAIN_STATE_AUTO);
 
-		/* check if AUTO mode still allowed */
-		res = main_state_transition(status, MAIN_STATE_AUTO);
+	if (res == TRANSITION_DENIED) {
+		/* AUTO mode denied, don't try RTL, switch to failsafe state LAND */
+		res = failsafe_state_transition(status, FAILSAFE_STATE_RC_LOSS_LAND);
 
 		if (res == TRANSITION_DENIED) {
-			/* AUTO mode denied, don't try RTL, switch to failsafe state LAND */
-			res = failsafe_state_transition(status, FAILSAFE_STATE_LAND);
-
-			if (res == TRANSITION_DENIED) {
-				/* LAND not allowed, set TERMINATION state */
-				res = failsafe_state_transition(status, FAILSAFE_STATE_TERMINATION);
-			}
-		}
-	} else {
-		if (status->failsafe_state != FAILSAFE_STATE_NORMAL) {
-			/* reset failsafe when disarmed */
-			res = failsafe_state_transition(status, FAILSAFE_STATE_NORMAL);
+			/* LAND not allowed, set TERMINATION state */
+			res = failsafe_state_transition(status, FAILSAFE_STATE_TERMINATION);
 		}
 	}
 
