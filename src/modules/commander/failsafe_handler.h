@@ -65,6 +65,8 @@ private:
 	control::BlockParamFloat rc_loss_threshold_seconds;
 	control::BlockParamFloat data_loss_threshold_seconds;
 	control::BlockParamInt failsafe_rc_auto_enabled;
+	control::BlockParamFloat gps_loss_loiter_time;
+	control::BlockParamInt gps_loss_action;
 
 	hrt_abstime last_timestamp;		/**< Timestamp of last update */
 
@@ -73,6 +75,11 @@ private:
 
 	transition_result_t handle_rc_loss_manual(vehicle_status_s* status);
 	transition_result_t handle_rc_loss_auto(vehicle_status_s* status);
+
+
+	int counter_gps_losses;
+	float gps_loss_wait_timer;
+	transition_result_t update_gps_wait(vehicle_status_s* status, float dt);
 };
 
 #endif /* FAILSAFEHANDLER_H_ */

@@ -407,7 +407,7 @@ transition_result_t failsafe_state_transition(struct vehicle_status_s *status, f
 	} else {
 		switch (new_failsafe_state) {
 		case FAILSAFE_STATE_NORMAL:
-			/* allowed from all states except from FAILSAFE_STATE_TERMINATION (which is excluded by the outer if statement) */
+			/* allowed from all states except from FAILSAFE_STATE_TERMINATION */
 			ret = TRANSITION_CHANGED;
 			break;
 
@@ -445,9 +445,11 @@ transition_result_t failsafe_state_transition(struct vehicle_status_s *status, f
 			}
 			break;
 
-		case FAILSAFE_STATE_GPS_LOSS:
-			if (status->condition_global_position_valid) {
-				//XXX set set_nav_state to NAV_STATE_GPSLOSS which makes the navigator perfrom the actions for a gps loss (loiter, wait, termination, or fly back)
+		case FAILSAFE_STATE_GPS_LOSS_WAIT:
+				ret = TRANSITION_CHANGED;
+			break;
+		case FAILSAFE_STATE_GPS_LOSS_LAND:
+			if (status->failsafe_state == FAILSAFE_STATE_GPS_LOSS_WAIT) {
 				ret = TRANSITION_CHANGED;
 			}
 			break;

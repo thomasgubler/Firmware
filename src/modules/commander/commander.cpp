@@ -1618,11 +1618,36 @@ set_control_mode()
 
 		break;
 
-	case FAILSAFE_STATE_RC_LOSS_RTL:
+	case FAILSAFE_STATE_GPS_LOSS_WAIT:
+		/* wait (e.g. loiter at current position */
+		control_mode.flag_control_manual_enabled = false;
+		control_mode.flag_control_auto_enabled = true;
+		control_mode.flag_control_rates_enabled = true;
+		control_mode.flag_control_attitude_enabled = true;
+		control_mode.flag_control_position_enabled = false;
+		control_mode.flag_control_velocity_enabled = true;
+		control_mode.flag_control_altitude_enabled = true;
+		control_mode.flag_control_climb_rate_enabled = true;
+		control_mode.flag_control_loiter_openloop = true;
+		break;
+
+	case FAILSAFE_STATE_GPS_LOSS_LAND:
+		/* Land without position control */
+		control_mode.flag_control_manual_enabled = false;
+		control_mode.flag_control_auto_enabled = true;
+		control_mode.flag_control_rates_enabled = true;
+		control_mode.flag_control_attitude_enabled = true;
+		control_mode.flag_control_position_enabled = false;
+		control_mode.flag_control_velocity_enabled = true;
+		control_mode.flag_control_altitude_enabled = true;
+		control_mode.flag_control_climb_rate_enabled = true;
+		control_mode.flag_control_land_openloop = true;
+		break;
+
 	case FAILSAFE_STATE_RC_LOSS_LAND:
 	case FAILSAFE_STATE_COMM_LOSS:
-	case FAILSAFE_STATE_GPS_LOSS:
 	case FAILSAFE_STATE_SOFT_GEOFENCE_VIOLATION:
+	case FAILSAFE_STATE_RC_LOSS_RTL:
 		navigator_enabled = true;
 		break;
 

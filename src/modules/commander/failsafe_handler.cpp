@@ -47,9 +47,13 @@ _position_setpoint_triplet(NULL, ORB_ID(position_setpoint_triplet), 500),
 rc_loss_threshold_seconds(NULL, "FAIL_RC_TIME", false),
 data_loss_threshold_seconds(NULL, "FAIL_DL_TIME", false),
 failsafe_rc_auto_enabled(NULL, "FAIL_AUTO_RC", false),
+gps_loss_loiter_time(NULL, "FAIL_GPS_WAIT", false),
+gps_loss_action(NULL, "FAIL_GPS_ACT", false),
 last_timestamp(hrt_absolute_time()),
 rc_loss_timer(0.0f),
-data_link_loss_timer(0.0f)
+data_link_loss_timer(0.0f),
+counter_gps_losses(0),
+gps_loss_wait_timer(0.0f)
 {
 	updateSubscriptions();
 	updateParams();
@@ -88,7 +92,7 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 	//XXX data link status needs to be set
 //	if (status->data_link_signal_lost) {
 //		data_loss_timer += dt;
-//		if (data_loss_timer >= data_loss_threshold_seconds.get()) {
+//		if (data_loss_threshold_seconds.get() > 0 && data_loss_timer >= data_loss_threshold_seconds.get()) {
 //			bool data_loss_threshold_reached = true;
 //		}
 //	} else {
@@ -100,7 +104,7 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 	bool rc_loss_threshold_reached = false;
 	if (status->rc_signal_lost) {
 		rc_loss_timer += dt;
-		if (rc_loss_timer >= rc_loss_threshold_seconds.get()) {
+		if (rc_loss_threshold_seconds.get() > 0 && rc_loss_timer >= rc_loss_threshold_seconds.get()) {
 			bool rc_loss_threshold_reached = true;
 		}
 	} else {
@@ -118,17 +122,24 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 	/* Handle all failures depending on main state */
 	if (status->main_state == MAIN_STATE_AUTO) {
 
-		/* GPS loss, data link loss and combinations*/
+		/* GPS loss, data link loss and combinations */
+
+		/* Increase gps loss counter if this is new occurrence */
+		if(!status->condition_global_position_valid && status->failsafe_state != FAILSAFE_STATE_GPS_LOSS_WAIT)
+			counter_gps_losses++;
+
+		/* Change states */
 		if (!status->condition_global_position_valid && data_link_loss_threshold_reached) {
 			transition_result_t failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_TERMINATION);
 			return failsafe_res;
 		} else if (status->condition_global_position_valid && !data_link_loss_threshold_reached) {
-			transition_result_t failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_GPS_LOSS);
+			transition_result_t failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_GPS_LOSS_WAIT);
 			return failsafe_res;
 		} else if (status->condition_global_position_valid && data_link_loss_threshold_reached) {
 			transition_result_t failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS);
 			return failsafe_res;
 		}
+		/* END gps and data link loss handling */
 
 		/* RC loss, only if failsafe on rc loss is enabled via a param */
 		if (rc_loss_threshold_reached && failsafe_rc_auto_enabled.get() > 0) {
@@ -148,7 +159,7 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 	}
 
 
-	/* recover from failsafe */
+	/* recover or progress failsafe state */
 	bool recovered = false;
 	if ( status->failsafe_state == FAILSAFE_STATE_RC_LOSS_RTL) {
 		if (!armed.armed || !rc_loss_threshold_reached)
@@ -158,8 +169,8 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 			recovered = true;
 	} else if ( status->failsafe_state == FAILSAFE_STATE_COMM_LOSS) {
 		//XXX check if the issue is resolved
-	} else if ( status->failsafe_state == FAILSAFE_STATE_GPS_LOSS) {
-		//XXX check if the issue is resolved
+	} else if ( status->failsafe_state == FAILSAFE_STATE_GPS_LOSS_WAIT) {
+		update_gps_wait(status, dt);
 	} else if ( status->failsafe_state == FAILSAFE_STATE_SOFT_GEOFENCE_VIOLATION) {
 		//XXX check if the issue is resolved
 	}
@@ -214,6 +225,40 @@ transition_result_t FailsafeHandler::handle_rc_loss_auto(vehicle_status_s* statu
 		if (res == TRANSITION_DENIED) {
 			/* LAND not allowed, set TERMINATION state */
 			res = failsafe_state_transition(status, FAILSAFE_STATE_TERMINATION);
+		}
+	}
+
+	return res;
+}
+
+transition_result_t FailsafeHandler::update_gps_wait(vehicle_status_s* status, float dt)
+{
+	transition_result_t res = TRANSITION_NOT_CHANGED;
+
+	if (status->condition_global_position_valid) {
+		/* Have a valid position, reset if this is the first gps loss */
+		if (counter_gps_losses <= 1) {
+
+			res = failsafe_state_transition(status, FAILSAFE_STATE_NORMAL);
+			if (res == TRANSITION_CHANGED){
+				gps_loss_wait_timer = 0.0f;
+			}
+		}
+	} else {
+		gps_loss_wait_timer += dt;
+	}
+
+	if (gps_loss_wait_timer >= gps_loss_loiter_time.get()) {
+		/* Did not get GPS lock in gps_loss_loiter_time seconds, depending on the param settings land or switch to manual */
+		switch (gps_loss_action.get()) {
+			case 1: //Switch to manual
+				if (!status->rc_signal_lost) {
+					res = main_state_transition(status, MAIN_STATE_MANUAL);
+				}
+				break;
+			default: // Try to land
+				res = failsafe_state_transition(status, FAILSAFE_STATE_GPS_LOSS_LAND);
+			break;
 		}
 	}
 

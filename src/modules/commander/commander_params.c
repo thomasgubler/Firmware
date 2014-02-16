@@ -86,10 +86,22 @@ PARAM_DEFINE_INT32(BAT_N_CELLS, 3);
 PARAM_DEFINE_FLOAT(BAT_CAPACITY, -1.0f);
 
 /**
+ * RC loss threshold time
  *
+ * After FAIL_RC_TIME seconds of RC loss the failsafe system will kick in, set to -1 to disable
+ *
+ * @group Failsafe
  */
-PARAM_DEFINE_FLOAT(FAIL_RC_TIME, 1.5);
-PARAM_DEFINE_FLOAT(FAIL_DL_TIME, 10.);
+PARAM_DEFINE_FLOAT(FAIL_RC_TIME, 0.0f);
+
+/**
+ * Data link loss threshold time
+ *
+ * After FAIL_DL_TIME seconds of data link loss the failsafe system will kick in, set to -1 to disable
+ *
+ * @group Failsafe
+ */
+PARAM_DEFINE_FLOAT(FAIL_DL_TIME, -1.0f);
 /**
  * Failsafe on RC loss in Manual
  *
@@ -98,3 +110,23 @@ PARAM_DEFINE_FLOAT(FAIL_DL_TIME, 10.);
  * @group Failsafe
  */
 PARAM_DEFINE_INT32(FAIL_AUTO_RC, 0);
+
+/**
+ * Failsafe wait time on GPS loss in AUTO
+ *
+ * On a gps loss in auto mode the system tries to loiter (open loop) at the last position for this amount of seconds
+ *
+ * @group Failsafe
+ */
+PARAM_DEFINE_FLOAT(FAIL_GPS_WAIT, 0);
+
+/**
+ * GPS loss action
+ *
+ * This sets the action the system performs after a gps loss and after it has waited unsuccessfully for FAIL_GPS_WAIT seconds
+ * 0: perform landing without position control
+ * 1: switch to manual
+ *
+ * @group Failsafe
+ */
+PARAM_DEFINE_FLOAT(FAIL_GPS_ACT, 1);
