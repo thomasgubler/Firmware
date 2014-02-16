@@ -1143,6 +1143,17 @@ FixedwingPositionControl::control_position(const math::Vector<2> &current_positi
 					    _parameters.throttle_min, _parameters.throttle_max, _parameters.throttle_cruise,
 					    _parameters.pitch_limit_min, _parameters.pitch_limit_max);
 
+	} else if (_control_mode.flag_control_loiter_openloop) {
+		/** OPEN LOOP LOITER **/
+
+		_att_sp.yaw_body = 20.0f * M_DEG_TO_RAD_F;
+		_att_sp.yaw_body = 0.0f;
+
+		_tecs.update_pitch_throttle(_R_nb, _att.pitch, _global_pos.alt, _pos_sp_triplet.current.alt, calculate_target_airspeed(_parameters.airspeed_trim),
+								    _airspeed.indicated_airspeed_m_s, eas2tas,
+								    false, math::radians(_parameters.pitch_limit_min),
+								    _parameters.throttle_min, _parameters.throttle_max, _parameters.throttle_cruise,
+								    math::radians(_parameters.pitch_limit_min), math::radians(_parameters.pitch_limit_max));
 	} else {
 
 		/** MANUAL FLIGHT **/
