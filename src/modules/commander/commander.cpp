@@ -1628,7 +1628,7 @@ set_control_mode()
 		control_mode.flag_control_velocity_enabled = true;
 		control_mode.flag_control_altitude_enabled = true;
 		control_mode.flag_control_climb_rate_enabled = true;
-		control_mode.flag_control_loiter_openloop = true;
+		control_mode.flag_control_loiter_openloop_enabled = true;
 		break;
 
 	case FAILSAFE_STATE_GPS_LOSS_LAND:
@@ -1641,7 +1641,7 @@ set_control_mode()
 		control_mode.flag_control_velocity_enabled = true;
 		control_mode.flag_control_altitude_enabled = true;
 		control_mode.flag_control_climb_rate_enabled = true;
-		control_mode.flag_control_land_openloop = true;
+		control_mode.flag_control_land_openloop_enabled = true;
 		break;
 
 	case FAILSAFE_STATE_RC_LOSS_LAND:

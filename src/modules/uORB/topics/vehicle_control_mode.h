@@ -81,8 +81,8 @@ struct vehicle_control_mode_s
 	bool flag_control_altitude_enabled;		/**< true if altitude is controlled */
 	bool flag_control_climb_rate_enabled;	/**< true if climb rate is controlled */
 	bool flag_control_termination_enabled;	/**< true if flighttermination is enabled */
-	bool flag_control_loiter_openloop;	/**< true if open loop loiter is enabled (without position measurement) */
-	bool flag_control_land_openloop;	/**< true if open loop landing is enabled (without position measurement) */
+	bool flag_control_loiter_openloop_enabled;	/**< true if open loop loiter is enabled (without position measurement) */
+	bool flag_control_land_openloop_enabled;	/**< true if open loop landing is enabled (without position measurement) */
 };
 
 /**

@@ -1143,7 +1143,7 @@ FixedwingPositionControl::control_position(const math::Vector<2> &current_positi
 					    _parameters.throttle_min, _parameters.throttle_max, _parameters.throttle_cruise,
 					    _parameters.pitch_limit_min, _parameters.pitch_limit_max);
 
-	} else if (_control_mode.flag_control_loiter_openloop) {
+	} else if (_control_mode.flag_control_loiter_openloop_enabled) {
 		/** OPEN LOOP LOITER **/
 
 		_att_sp.yaw_body = 20.0f * M_DEG_TO_RAD_F;
