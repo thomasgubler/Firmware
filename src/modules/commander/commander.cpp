@@ -97,6 +97,7 @@
 #include "baro_calibration.h"
 #include "rc_calibration.h"
 #include "airspeed_calibration.h"
+#include "failsafe_handler.h"
 
 /* oddly, ERROR is not defined for c++ */
 #ifdef ERROR
@@ -579,6 +580,9 @@ bool handle_command(struct vehicle_status_s *status, const struct safety_s *safe
 		}
 		break;
 
+		/* Data link loss mode */
+		//XXX
+
 	case VEHICLE_CMD_PREFLIGHT_REBOOT_SHUTDOWN:
 	case VEHICLE_CMD_PREFLIGHT_CALIBRATION:
 	case VEHICLE_CMD_PREFLIGHT_SET_SENSOR_OFFSETS:
@@ -816,6 +820,9 @@ int commander_thread_main(int argc, char *argv[])
 	memset(&info, 0, sizeof(info));
 
 	control_status_leds(&status, &armed, true);
+
+	/* Initialize failsafe handler */
+	FailsafeHandler failsafe_handler;
 
 	/* now initialized */
 	commander_initialized = true;
@@ -1189,10 +1196,6 @@ int commander_thread_main(int argc, char *argv[])
 				mavlink_log_critical(mavlink_fd, "ERROR: arming state transition denied");
 			}
 
-			if (status.failsafe_state != FAILSAFE_STATE_NORMAL) {
-				/* recover from failsafe */
-				transition_result_t res = failsafe_state_transition(&status, FAILSAFE_STATE_NORMAL);
-			}
 
 			/* fill status according to mode switches */
 			check_mode_switches(&sp_man, &status);
@@ -1213,43 +1216,6 @@ int commander_thread_main(int argc, char *argv[])
 				mavlink_log_critical(mavlink_fd, "#audio: CRITICAL: RC SIGNAL LOST");
 				status.rc_signal_lost = true;
 				status_changed = true;
-			}
-
-			if (armed.armed) {
-				if (status.main_state == MAIN_STATE_AUTO) {
-					/* check if AUTO mode still allowed */
-					transition_result_t res = main_state_transition(&status, MAIN_STATE_AUTO);
-
-					if (res == TRANSITION_DENIED) {
-						/* AUTO mode denied, don't try RTL, switch to failsafe state LAND */
-						res = failsafe_state_transition(&status, FAILSAFE_STATE_LAND);
-
-						if (res == TRANSITION_DENIED) {
-							/* LAND not allowed, set TERMINATION state */
-							transition_result_t res = failsafe_state_transition(&status, FAILSAFE_STATE_TERMINATION);
-						}
-					}
-
-				} else {
-					/* failsafe for manual modes */
-					transition_result_t res = failsafe_state_transition(&status, FAILSAFE_STATE_RTL);
-
-					if (res == TRANSITION_DENIED) {
-						/* RTL not allowed (no global position estimate), try LAND */
-						res = failsafe_state_transition(&status, FAILSAFE_STATE_LAND);
-
-						if (res == TRANSITION_DENIED) {
-							/* LAND not allowed, set TERMINATION state */
-							res = failsafe_state_transition(&status, FAILSAFE_STATE_TERMINATION);
-						}
-					}
-				}
-
-			} else {
-				if (status.failsafe_state != FAILSAFE_STATE_NORMAL) {
-					/* reset failsafe when disarmed */
-					transition_result_t res = failsafe_state_transition(&status, FAILSAFE_STATE_NORMAL);
-				}
 			}
 		}
 
@@ -1272,6 +1238,9 @@ int commander_thread_main(int argc, char *argv[])
 			if (handle_command(&status, &safety, &cmd, &armed))
 				status_changed = true;
 		}
+
+		/* Update failsafe_handler: performs check if system needs to enter failsafe mode */
+		failsafe_handler.update(&status, armed);
 
 		/* check which state machines for changes, clear "changed" flag */
 		bool arming_state_changed = check_arming_state_changed();

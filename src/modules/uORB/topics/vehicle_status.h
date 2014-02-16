@@ -87,9 +87,12 @@ typedef enum {
 
 typedef enum {
 	FAILSAFE_STATE_NORMAL = 0,		/**< Normal operation */
-	FAILSAFE_STATE_RTL,				/**< Return To Launch */
+	FAILSAFE_STATE_RTL,			/**< Return To Launch */
 	FAILSAFE_STATE_LAND,			/**< Land without position control */
 	FAILSAFE_STATE_TERMINATION,		/**< Disable motors and use parachute, can't be recovered */
+	FAILSAFE_STATE_COMM_LOSS,		/**< communictaion lost with ground station, RTL or fly to comms loss waypoint */
+	FAILSAFE_STATE_GPS_LOSS,		/**< GPS lock lost */
+	FAILSAFE_STATE_SOFT_GEOFENCE_VIOLATION,	/**< Soft geofence violated, turn around to avoid hard geofence violation */
 	FAILSAFE_STATE_MAX
 } failsafe_state_t;
 

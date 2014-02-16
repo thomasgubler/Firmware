@@ -1,7 +1,8 @@
 /****************************************************************************
  *
  *   Copyright (c) 2013 PX4 Development Team. All rights reserved.
- *   Author: Lorenz Meier <lm@inf.ethz.ch>
+ *   Author: @author Thomas Gubler <thomasgubler@student.ethz.ch>
+ *   	     @author Anton Babushkin <anton.babushkin@me.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,70 +32,47 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  ****************************************************************************/
-
 /**
- * @file commander_params.c
- *
- * Parameters defined by the sensors task.
- *
- * @author Lorenz Meier <lm@inf.ethz.ch>
- * @author Thomas Gubler <thomasgubler@student.ethz.ch>
- * @author Julian Oes <joes@student.ethz.ch>
+ * @file failsafe_handler.h
+ * Provides an update function and calls to failsafe state machine given the current state of the system
  */
 
-#include <nuttx/config.h>
-#include <systemlib/param/param.h>
+#ifndef FAILSAFEHANDLER_H_
+#define FAILSAFEHANDLER_H_
 
-PARAM_DEFINE_FLOAT(TRIM_ROLL, 0.0f);
-PARAM_DEFINE_FLOAT(TRIM_PITCH, 0.0f);
-PARAM_DEFINE_FLOAT(TRIM_YAW, 0.0f);
+#include <uORB/topics/vehicle_status.h>
+#include <uORB/topics/position_setpoint_triplet.h>
+#include <controllib/uorb/UOrbSubscription.hpp>
+#include <controllib/block/BlockParam.hpp>
+#include <drivers/drv_hrt.h>
 
-/**
- * Empty cell voltage.
- *
- * Defines the voltage where a single cell of the battery is considered empty.
- *
- * @group Battery Calibration
- */
-PARAM_DEFINE_FLOAT(BAT_V_EMPTY, 3.4f);
+#include "state_machine_helper.h"
 
-/**
- * Full cell voltage.
- *
- * Defines the voltage where a single cell of the battery is considered full.
- *
- * @group Battery Calibration
- */
-PARAM_DEFINE_FLOAT(BAT_V_FULL, 3.9f);
+class FailsafeHandler {
+public:
+	FailsafeHandler();
+	virtual ~FailsafeHandler();
 
-/**
- * Number of cells.
- *
- * Defines the number of cells the attached battery consists of.
- *
- * @group Battery Calibration
- */
-PARAM_DEFINE_INT32(BAT_N_CELLS, 3);
+	transition_result_t update(vehicle_status_s* status, const actuator_armed_s& armed);
+protected:
+private:
+	/* Subscriptions */
+	void updateSubscriptions();
+	control::UOrbSubscription<position_setpoint_triplet_s> _position_setpoint_triplet;          /**< position_setpoint_triplet_s sub from navigator */
 
-/**
- * Battery capacity.
- *
- * Defines the capacity of the attached battery.
- *
- * @group Battery Calibration
- */
-PARAM_DEFINE_FLOAT(BAT_CAPACITY, -1.0f);
+	/* Params */
+	void updateParams();
+	control::BlockParamFloat rc_loss_threshold_seconds;
+	control::BlockParamFloat data_loss_threshold_seconds;
+	control::BlockParamInt failsafe_rc_auto_enabled;
 
-/**
- *
- */
-PARAM_DEFINE_FLOAT(FAIL_RC_TIME, 1.5);
-PARAM_DEFINE_FLOAT(FAIL_DL_TIME, 10.);
-/**
- * Failsafe on RC loss in Manual
- *
- * If set to 1 the system will perform failsafe actions (RTL) when in auto mode and RC signal is lost
- *
- * @group Failsafe
- */
-PARAM_DEFINE_INT32(FAIL_AUTO_RC, 0);
+	hrt_abstime last_timestamp;		/**< Timestamp of last update */
+
+	float rc_loss_timer;			/**< Counts the time of RC loss in seconds */
+	float data_link_loss_timer;		/**< Counts the time of data link loss in seconds */
+
+	transition_result_t handle_rc_loss_manual(vehicle_status_s* status, const actuator_armed_s& armed);
+	transition_result_t handle_rc_loss_auto(vehicle_status_s* status, const actuator_armed_s& armed);
+};
+
+#endif /* FAILSAFEHANDLER_H_ */

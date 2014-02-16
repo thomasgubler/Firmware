@@ -842,9 +842,12 @@ Navigator::task_main()
 			}
 
 			/* Check geofence violation */
-			if (!_geofence.inside(&_global_pos)) {
-				//xxx: publish geofence violation here (or change local flag depending on which app handles the flight termination)
-
+			static bool inside_geofence_last = false;
+			bool inside_geofence_current =  _geofence.inside(&_global_pos);
+			if (inside_geofence_current != inside_geofence_last) _pos_sp_triplet_updated = true;
+			inside_geofence_current = inside_geofence_last;
+			_pos_sp_triplet.geofence_violated = inside_geofence_current;
+			if (!inside_geofence_current) {
 				/* Issue a warning about the geofence violation once */
 				if (!_geofence_violation_warning_sent) {
 					mavlink_log_critical(_mavlink_fd, "#audio: Geofence violation");
