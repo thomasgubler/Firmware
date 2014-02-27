@@ -69,7 +69,7 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 	/* Update parameters */
 	updateParams();
 
-	/* Update subscriptions which provide additonal data */
+	/* Update subscriptions which provide additional data */
 	updateSubscriptions();
 
 
