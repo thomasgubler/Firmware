@@ -311,14 +311,15 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 	}
 
 	/* handle status updates of the radio */
+	bool tstatus_updated = false;
+	struct telemetry_status_s tstatus;
 	if (msg->msgid == MAVLINK_MSG_ID_RADIO_STATUS) {
-
-		struct telemetry_status_s tstatus;
 
 		mavlink_radio_status_t rstatus;
 		mavlink_msg_radio_status_decode(msg, &rstatus);
 
-		/* publish telemetry status topic */
+		/* save in tstatus and set tstatus_updated flag --> tstatus will be published */
+		tstatus_updated = true;
 		tstatus.timestamp = hrt_absolute_time();
 		tstatus.type = TELEMETRY_STATUS_RADIO_TYPE_3DR_RADIO;
 		tstatus.rssi = rstatus.rssi;
@@ -328,7 +329,24 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		tstatus.remote_noise = rstatus.remnoise;
 		tstatus.rxerrors = rstatus.rxerrors;
 		tstatus.fixed = rstatus.fixed;
+	}
 
+	/* Heartbeats */
+	if (msg->msgid == MAVLINK_MSG_ID_HEARTBEAT) {
+
+		mavlink_heartbeat_t heartbeat;
+		mavlink_msg_heartbeat_decode(msg, &heartbeat);
+		/* Heartbeats from groundstation: used to determine if the datalink is healthy */
+		if (heartbeat.type == VEHICLE_TYPE_GCS) {
+			/* save in tstatus and set tstatus_updated flag --> tstatus will be published */
+			tstatus_updated = true;
+			tstatus.timestamp_last_gcs_heartbeat = hrt_absolute_time();
+		}
+
+	}
+
+	/* publish telemetry status topic */
+	if (tstatus_updated) {
 		if (telemetry_status_pub <= 0) {
 			telemetry_status_pub = orb_advertise(ORB_ID(telemetry_status), &tstatus);
 

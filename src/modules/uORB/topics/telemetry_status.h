@@ -58,13 +58,15 @@ enum TELEMETRY_STATUS_RADIO_TYPE {
 struct telemetry_status_s {
 	uint64_t timestamp;
     enum TELEMETRY_STATUS_RADIO_TYPE type;  /**< type of the radio hardware     */
-    uint8_t rssi;              /**< local signal strength                      */
-    uint8_t remote_rssi;       /**< remote signal strength                     */
-    uint16_t rxerrors;          /**< receive errors                             */
-    uint16_t fixed;             /**< count of error corrected packets           */
-    uint8_t noise;              /**< background noise level                     */
-    uint8_t remote_noise;       /**< remote background noise level              */
-    uint8_t txbuf;              /**< how full the tx buffer is as a percentage  */
+    uint8_t rssi;				/**< local signal strength                      */
+    uint8_t remote_rssi;			/**< remote signal strength                     */
+    uint16_t rxerrors;				/**< receive errors                             */
+    uint16_t fixed;				/**< count of error corrected packets           */
+    uint8_t noise;				/**< background noise level                     */
+    uint8_t remote_noise;			/**< remote background noise level              */
+    uint8_t txbuf;				/**< how full the tx buffer is as a percentage  */
+
+    uint64_t timestamp_last_gcs_heartbeat;	/**< time when the last heartbeat form the gcs was received*/
 };
 
 /**
