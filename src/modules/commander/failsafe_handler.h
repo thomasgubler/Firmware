@@ -42,6 +42,7 @@
 
 #include <uORB/topics/vehicle_status.h>
 #include <uORB/topics/position_setpoint_triplet.h>
+#include <uORB/topics/telemetry_status.h>
 #include <controllib/uorb/UOrbSubscription.hpp>
 #include <controllib/block/BlockParam.hpp>
 #include <drivers/drv_hrt.h>
@@ -58,7 +59,8 @@ protected:
 private:
 	/* Subscriptions */
 	void updateSubscriptions();
-	control::UOrbSubscription<position_setpoint_triplet_s> _position_setpoint_triplet;          /**< position_setpoint_triplet_s sub from navigator */
+	control::UOrbSubscription<position_setpoint_triplet_s> _position_setpoint_triplet;      /**< position_setpoint_triplet_s sub from navigator */
+	control::UOrbSubscription<telemetry_status_s> _telemetry_status;          		/**< telemetry_status_s sub from mavlink */
 
 	/* Params */
 	void updateParams();
@@ -71,7 +73,6 @@ private:
 	hrt_abstime last_timestamp;		/**< Timestamp of last update */
 
 	float rc_loss_timer;			/**< Counts the time of RC loss in seconds */
-	float data_link_loss_timer;		/**< Counts the time of data link loss in seconds */
 
 	transition_result_t handle_rc_loss_manual(vehicle_status_s* status);
 	transition_result_t handle_rc_loss_auto(vehicle_status_s* status);

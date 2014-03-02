@@ -44,6 +44,7 @@
 
 FailsafeHandler::FailsafeHandler() :
 _position_setpoint_triplet(NULL, ORB_ID(position_setpoint_triplet), 500),
+_telemetry_status(NULL, ORB_ID(telemetry_status), 500),
 rc_loss_threshold_seconds(NULL, "FAIL_RC_TIME", false),
 data_loss_threshold_seconds(NULL, "FAIL_DL_TIME", false),
 failsafe_rc_auto_enabled(NULL, "FAIL_AUTO_RC", false),
@@ -51,7 +52,6 @@ gps_loss_loiter_time(NULL, "FAIL_GPS_WAIT", false),
 gps_loss_action(NULL, "FAIL_GPS_ACT", false),
 last_timestamp(hrt_absolute_time()),
 rc_loss_timer(0.0f),
-data_link_loss_timer(0.0f),
 counter_gps_losses(0),
 gps_loss_wait_timer(0.0f)
 {
@@ -89,23 +89,18 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 
 	/* Update data link loss timer */
 	bool data_link_loss_threshold_reached = false;
-	//XXX data link status needs to be set
-//	if (status->data_link_signal_lost) {
-//		data_loss_timer += dt;
-//		if (data_loss_threshold_seconds.get() > 0 && data_loss_timer >= data_loss_threshold_seconds.get()) {
-//			bool data_loss_threshold_reached = true;
-//		}
-//	} else {
-//		data_loss_timer = 0.0f;
-//	}
+	float dt_last_heartbeat = (float)hrt_elapsed_time(&_telemetry_status.timestamp_last_gcs_heartbeat) * 1e-6f;
+	if (data_loss_threshold_seconds.get() >= 0 && dt_last_heartbeat >= data_loss_threshold_seconds.get()) {
+		data_link_loss_threshold_reached = true;
+	}
 
 
 	/* Update RC loss timer */
 	bool rc_loss_threshold_reached = false;
 	if (status->rc_signal_lost) {
 		rc_loss_timer += dt;
-		if (rc_loss_threshold_seconds.get() > 0 && rc_loss_timer >= rc_loss_threshold_seconds.get()) {
-			bool rc_loss_threshold_reached = true;
+		if (rc_loss_threshold_seconds.get() >= 0 && rc_loss_timer >= rc_loss_threshold_seconds.get()) {
+			rc_loss_threshold_reached = true;
 		}
 	} else {
 		rc_loss_timer = 0.0f;
@@ -191,6 +186,7 @@ void FailsafeHandler::updateParams() {
 
 void FailsafeHandler::updateSubscriptions() {
 	_position_setpoint_triplet.update();
+	_telemetry_status.update();
 }
 
 transition_result_t FailsafeHandler::handle_rc_loss_manual(vehicle_status_s* status) {
