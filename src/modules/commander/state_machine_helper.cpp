@@ -446,6 +446,15 @@ transition_result_t failsafe_state_transition(struct vehicle_status_s *status, f
 				ret = TRANSITION_CHANGED;
 			}
 			break;
+		case FAILSAFE_STATE_COMM_LOSS_RTL:
+			/* global position and home position required for RTL */
+			if (status->condition_global_position_valid && status->condition_home_position_valid) {
+				status->set_nav_state = NAV_STATE_RTL;
+				status->set_nav_state_timestamp = hrt_absolute_time();
+				ret = TRANSITION_CHANGED;
+			}
+
+			break;
 
 		case FAILSAFE_STATE_GPS_LOSS_WAIT:
 			//XXX set more (navigator) flags

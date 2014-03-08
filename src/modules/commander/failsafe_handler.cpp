@@ -124,12 +124,16 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 		/* GPS loss, data link loss and combinations */
 
 		/* Increase gps loss counter if this is new occurrence */
-		if(!status->condition_global_position_valid && status->failsafe_state != FAILSAFE_STATE_GPS_LOSS_WAIT)
+		if(!status->condition_global_position_valid && status->failsafe_state != FAILSAFE_STATE_GPS_LOSS_WAIT) {
 			counter_gps_losses++;
+		}
 
 		/* Increase comm loss counter if this is new occurrence */
-		if(!status->condition_global_position_valid && status->failsafe_state != FAILSAFE_STATE_COMM_LOSS)
+		if(data_link_loss_threshold_reached &&
+				status->failsafe_state != FAILSAFE_STATE_COMM_LOSS &&
+				status->failsafe_state != FAILSAFE_STATE_COMM_LOSS_RTL) {
 			counter_comm_losses++;
+		}
 
 		/* Change states */
 		if (!status->condition_global_position_valid && data_link_loss_threshold_reached) {
@@ -139,7 +143,14 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 			transition_result_t failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_GPS_LOSS_WAIT);
 			return failsafe_res;
 		} else if (status->condition_global_position_valid && data_link_loss_threshold_reached) {
-			transition_result_t failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS);
+
+			transition_result_t failsafe_res;
+			if (data_loss_threshold_counter.get() > 0 && counter_comm_losses > data_loss_threshold_counter.get()) {
+				failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS_RTL);
+			} else {
+				failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS);
+			}
+
 			return failsafe_res;
 		}
 		/* END gps and data link loss handling */
@@ -171,6 +182,8 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 		if (!armed.armed || !rc_loss_threshold_reached)
 			recovered = true;
 	} else if ( status->failsafe_state == FAILSAFE_STATE_COMM_LOSS) {
+		//XXX check if the issue is resolved
+	} else if ( status->failsafe_state == FAILSAFE_STATE_COMM_LOSS_RTL) {
 		//XXX check if the issue is resolved
 	} else if ( status->failsafe_state == FAILSAFE_STATE_GPS_LOSS_WAIT) {
 		update_gps_wait(status, dt);
