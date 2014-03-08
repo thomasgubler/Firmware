@@ -42,6 +42,7 @@
 #include "failsafe_handler.h"
 
 #include <sys/types.h>
+#include <float.h>
 
 
 FailsafeHandler::FailsafeHandler() :
@@ -148,7 +149,10 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 		} else if (status->condition_global_position_valid && data_link_loss_threshold_reached) {
 
 			transition_result_t failsafe_res;
-			if (data_loss_threshold_counter.get() > 0 && counter_comm_losses > data_loss_threshold_counter.get()) {
+			/* Fly to comms loss wp if it is available and if we are below the comms loss counter threshold */
+
+			if ( ( data_loss_threshold_counter.get() > 0 && counter_comm_losses > data_loss_threshold_counter.get() ) ||
+					data_loss_wp_lat.get() < FLT_EPSILON || data_loss_wp_on.get() <= FLT_EPSILON ) {
 				failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS_RTL);
 			} else {
 				failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS);

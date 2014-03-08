@@ -157,7 +157,7 @@ PARAM_DEFINE_INT32(FAIL_DL_COUN, 2);
 
  */
 
-PARAM_DEFINE_FLOAT(FAIL_DL_LAT, -1.0f);
+PARAM_DEFINE_FLOAT(FAIL_DL_LAT, 0.0f);
 
 /**
  * Comm Loss / Data Link Loss Waypoint Longitude
@@ -167,4 +167,4 @@ PARAM_DEFINE_FLOAT(FAIL_DL_LAT, -1.0f);
  * @group Failsafe
 
  */
-PARAM_DEFINE_FLOAT(FAIL_DL_LON, -1.0f);
+PARAM_DEFINE_FLOAT(FAIL_DL_LON, 0.0f);
