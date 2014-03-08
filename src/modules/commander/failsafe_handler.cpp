@@ -49,20 +49,20 @@ FailsafeHandler::FailsafeHandler() :
 SuperBlock(NULL, "FAIL"),
 _position_setpoint_triplet(&getSubscriptions(), ORB_ID(position_setpoint_triplet), 500),
 _telemetry_status(&getSubscriptions(), ORB_ID(telemetry_status), 500),
-rc_loss_threshold_seconds(this, "RC_TIME"),
-failsafe_rc_auto_enabled(this, "AUTO_RC"),
-data_loss_threshold_seconds(this, "DL_TIME"),
-data_loss_threshold_counter(this, "DL_COUN"),
-data_loss_wp_lat(this, "DL_LAT"),
-data_loss_wp_lon(this, "DL_LON"),
-data_loss_wp_alt(this, "DL_ALT"),
-gps_loss_loiter_time(this, "GPS_WAIT"),
-gps_loss_action(this, "GPS_ACT"),
-last_timestamp(hrt_absolute_time()),
-rc_loss_timer(0.0f),
-counter_gps_losses(0),
-gps_loss_wait_timer(0.0f),
-counter_comm_losses(0)
+_rc_loss_threshold_seconds(this, "RC_TIME"),
+_failsafe_rc_auto_enabled(this, "AUTO_RC"),
+_data_loss_threshold_seconds(this, "DL_TIME"),
+_data_loss_threshold_counter(this, "DL_COUN"),
+_data_loss_wp_lat(this, "DL_LAT"),
+_data_loss_wp_lon(this, "DL_LON"),
+_data_loss_wp_alt(this, "DL_ALT"),
+_gps_loss_loiter_time(this, "GPS_WAIT"),
+_gps_loss_action(this, "GPS_ACT"),
+_last_timestamp(hrt_absolute_time()),
+_rc_loss_timer(0.0f),
+_counter_gps_losses(0),
+_gps_loss_wait_timer(0.0f),
+_counter_comm_losses(0)
 {
 	updateSubscriptions();
 	updateParams();
@@ -83,8 +83,8 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 
 
 	/* Get time and update last_timestamp*/
-	float dt = (float)hrt_elapsed_time(&last_timestamp) * 1e-6f;
-	last_timestamp = hrt_absolute_time();
+	float dt = (float)hrt_elapsed_time(&_last_timestamp) * 1e-6f;
+	_last_timestamp = hrt_absolute_time();
 
 	/* First handle everything that leads to flight termination:
 	 * - flight termination request
@@ -99,7 +99,7 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 	/* Update data link loss timer */
 	bool data_link_loss_threshold_reached = false;
 	float dt_last_heartbeat = (float)hrt_elapsed_time(&_telemetry_status.timestamp_last_gcs_heartbeat) * 1e-6f;
-	if (data_loss_threshold_seconds.get() >= 0 && dt_last_heartbeat >= data_loss_threshold_seconds.get()) {
+	if (_data_loss_threshold_seconds.get() >= 0 && dt_last_heartbeat >= _data_loss_threshold_seconds.get()) {
 		data_link_loss_threshold_reached = true;
 	}
 
@@ -107,12 +107,12 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 	/* Update RC loss timer */
 	bool rc_loss_threshold_reached = false;
 	if (status->rc_signal_lost) {
-		rc_loss_timer += dt;
-		if (rc_loss_threshold_seconds.get() >= 0 && rc_loss_timer >= rc_loss_threshold_seconds.get()) {
+		_rc_loss_timer += dt;
+		if (_rc_loss_threshold_seconds.get() >= 0 && _rc_loss_timer >= _rc_loss_threshold_seconds.get()) {
 			rc_loss_threshold_reached = true;
 		}
 	} else {
-		rc_loss_timer = 0.0f;
+		_rc_loss_timer = 0.0f;
 	}
 
 
@@ -130,14 +130,14 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 
 		/* Increase gps loss counter if this is new occurrence */
 		if(!status->condition_global_position_valid && status->failsafe_state != FAILSAFE_STATE_GPS_LOSS_WAIT) {
-			counter_gps_losses++;
+			_counter_gps_losses++;
 		}
 
 		/* Increase comm loss counter if this is new occurrence */
 		if(data_link_loss_threshold_reached &&
 				status->failsafe_state != FAILSAFE_STATE_COMM_LOSS &&
 				status->failsafe_state != FAILSAFE_STATE_COMM_LOSS_RTL) {
-			counter_comm_losses++;
+			_counter_comm_losses++;
 		}
 
 		/* Change states */
@@ -152,8 +152,8 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 			transition_result_t failsafe_res;
 			/* Fly to comms loss wp if it is available and if we are below the comms loss counter threshold */
 
-			if ( ( data_loss_threshold_counter.get() > 0 && counter_comm_losses > data_loss_threshold_counter.get() ) ||
-					data_loss_wp_lat.get() < FLT_EPSILON || data_loss_wp_lon.get() <= FLT_EPSILON || data_loss_wp_alt.get() <= FLT_EPSILON) {
+			if ( ( _data_loss_threshold_counter.get() > 0 && _counter_comm_losses > _data_loss_threshold_counter.get() ) ||
+					_data_loss_wp_lat.get() < FLT_EPSILON || _data_loss_wp_lon.get() <= FLT_EPSILON || _data_loss_wp_alt.get() <= FLT_EPSILON) {
 				failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS_RTL);
 			} else {
 				failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS);
@@ -164,7 +164,7 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 		/* END gps and data link loss handling */
 
 		/* RC loss, only if failsafe on rc loss is enabled via a param */
-		if (rc_loss_threshold_reached && failsafe_rc_auto_enabled.get() > 0) {
+		if (rc_loss_threshold_reached && _failsafe_rc_auto_enabled.get() > 0) {
 			return handle_rc_loss_auto(status);
 		}
 
@@ -251,20 +251,20 @@ transition_result_t FailsafeHandler::update_gps_wait(vehicle_status_s* status, f
 
 	if (status->condition_global_position_valid) {
 		/* Have a valid position, reset if this is the first gps loss */
-		if (counter_gps_losses <= 1) {
+		if (_counter_gps_losses <= 1) {
 
 			res = failsafe_state_transition(status, FAILSAFE_STATE_NORMAL);
 			if (res == TRANSITION_CHANGED){
-				gps_loss_wait_timer = 0.0f;
+				_gps_loss_wait_timer = 0.0f;
 			}
 		}
 	} else {
-		gps_loss_wait_timer += dt;
+		_gps_loss_wait_timer += dt;
 	}
 
-	if (gps_loss_wait_timer >= gps_loss_loiter_time.get()) {
+	if (_gps_loss_wait_timer >= _gps_loss_loiter_time.get()) {
 		/* Did not get GPS lock in gps_loss_loiter_time seconds, depending on the param settings land or switch to manual */
-		switch (gps_loss_action.get()) {
+		switch (_gps_loss_action.get()) {
 			case 1: //Switch to manual
 				if (!status->rc_signal_lost) {
 					res = main_state_transition(status, MAIN_STATE_MANUAL);

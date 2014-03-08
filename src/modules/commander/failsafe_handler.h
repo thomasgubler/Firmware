@@ -66,31 +66,31 @@ private:
 	control::UOrbSubscription<telemetry_status_s> _telemetry_status;          		/**< telemetry_status_s sub from mavlink */
 
 	/* Params */
-	control::BlockParamFloat rc_loss_threshold_seconds;
-	control::BlockParamInt failsafe_rc_auto_enabled;
+	control::BlockParamFloat _rc_loss_threshold_seconds;
+	control::BlockParamInt _failsafe_rc_auto_enabled;
 
-	control::BlockParamFloat data_loss_threshold_seconds;
-	control::BlockParamInt data_loss_threshold_counter;
-	control::BlockParamFloat data_loss_wp_lat;
-	control::BlockParamFloat data_loss_wp_lon;
-	control::BlockParamFloat data_loss_wp_alt;
+	control::BlockParamFloat _data_loss_threshold_seconds;
+	control::BlockParamInt _data_loss_threshold_counter;
+	control::BlockParamFloat _data_loss_wp_lat;
+	control::BlockParamFloat _data_loss_wp_lon;
+	control::BlockParamFloat _data_loss_wp_alt;
 
-	control::BlockParamFloat gps_loss_loiter_time;
-	control::BlockParamInt gps_loss_action;
+	control::BlockParamFloat _gps_loss_loiter_time;
+	control::BlockParamInt _gps_loss_action;
 
-	hrt_abstime last_timestamp;		/**< Timestamp of last update */
+	hrt_abstime _last_timestamp;		/**< Timestamp of last update */
 
-	float rc_loss_timer;			/**< Counts the time of RC loss in seconds */
+	float _rc_loss_timer;			/**< Counts the time of RC loss in seconds */
 
 	transition_result_t handle_rc_loss_manual(vehicle_status_s* status);
 	transition_result_t handle_rc_loss_auto(vehicle_status_s* status);
 
 
-	int counter_gps_losses;
-	float gps_loss_wait_timer;
+	int _counter_gps_losses;
+	float _gps_loss_wait_timer;
 	transition_result_t update_gps_wait(vehicle_status_s* status, float dt);
 
-	int counter_comm_losses;
+	int _counter_comm_losses;
 };
 
 #endif /* FAILSAFEHANDLER_H_ */
