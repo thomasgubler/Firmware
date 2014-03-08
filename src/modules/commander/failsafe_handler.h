@@ -67,8 +67,11 @@ private:
 	/* Params */
 	void updateParams();
 	control::BlockParamFloat rc_loss_threshold_seconds;
-	control::BlockParamFloat data_loss_threshold_seconds;
 	control::BlockParamInt failsafe_rc_auto_enabled;
+
+	control::BlockParamFloat data_loss_threshold_seconds;
+	control::BlockParamInt data_loss_threshold_counter;
+
 	control::BlockParamFloat gps_loss_loiter_time;
 	control::BlockParamInt gps_loss_action;
 
