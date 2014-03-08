@@ -45,14 +45,17 @@
 
 
 FailsafeHandler::FailsafeHandler() :
-_position_setpoint_triplet(NULL, ORB_ID(position_setpoint_triplet), 500),
-_telemetry_status(NULL, ORB_ID(telemetry_status), 500),
-rc_loss_threshold_seconds(NULL, "FAIL_RC_TIME", false),
-failsafe_rc_auto_enabled(NULL, "FAIL_AUTO_RC", false),
-data_loss_threshold_seconds(NULL, "FAIL_DL_TIME", false),
-data_loss_threshold_counter(NULL, "FAIL_DL_COUN", false),
-gps_loss_loiter_time(NULL, "FAIL_GPS_WAIT", false),
-gps_loss_action(NULL, "FAIL_GPS_ACT", false),
+SuperBlock(NULL, "FAIL"),
+_position_setpoint_triplet(&getSubscriptions(), ORB_ID(position_setpoint_triplet), 500),
+_telemetry_status(&getSubscriptions(), ORB_ID(telemetry_status), 500),
+rc_loss_threshold_seconds(this, "RC_TIME"),
+failsafe_rc_auto_enabled(this, "AUTO_RC"),
+data_loss_threshold_seconds(this, "DL_TIME"),
+data_loss_threshold_counter(this, "DL_COUN"),
+data_loss_wp_lat(this, "DL_LAT"),
+data_loss_wp_lon(this, "DL_LON"),
+gps_loss_loiter_time(this, "GPS_WAIT"),
+gps_loss_action(this, "GPS_ACT"),
 last_timestamp(hrt_absolute_time()),
 rc_loss_timer(0.0f),
 counter_gps_losses(0),
@@ -197,17 +200,6 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 	}
 
 	return TRANSITION_NOT_CHANGED;
-}
-
-void FailsafeHandler::updateParams() {
-	rc_loss_threshold_seconds.update();
-	data_loss_threshold_seconds.update();
-	failsafe_rc_auto_enabled.update();
-}
-
-void FailsafeHandler::updateSubscriptions() {
-	_position_setpoint_triplet.update();
-	_telemetry_status.update();
 }
 
 transition_result_t FailsafeHandler::handle_rc_loss_manual(vehicle_status_s* status) {

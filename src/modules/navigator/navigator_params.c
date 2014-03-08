@@ -140,34 +140,3 @@ PARAM_DEFINE_FLOAT(NAV_RTL_LAND_T, -1.0f);
 PARAM_DEFINE_INT32(NAV_PARACHUTE_EN, 0);
 
 
-/* Failsafe Handler params */
-PARAM_DEFINE_FLOAT(FAIL_RC_TIME, 1.5f);
-PARAM_DEFINE_INT32(FAIL_AUTO_RC, 0);
-PARAM_DEFINE_FLOAT(FAIL_DL_TIME, 10);
-
-/**
- * Datalink counter threshold
- *
- * if FAIL_DL_COUN > 0:
- * 	system will RTL after FAIL_DL_COUN data link losses
- * else:
- * 	system will not RTL based on the number of data link losses
- *
- * @group Failsafe
-
- */
-PARAM_DEFINE_INT32(FAIL_DL_COUN, 2);
-PARAM_DEFINE_FLOAT(FAIL_GPS_WAIT, 30);
-
-/**
- * Action on gps loss
- *
- * Determines which action is performed when gps is lost in auto mode:
- * default (0): try to land
- * 1: switch to manual
- *
- * @group Failsafe
-
- */
-PARAM_DEFINE_INT32(FAIL_GPS_ACT, 0);
-

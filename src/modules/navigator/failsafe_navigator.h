@@ -41,14 +41,23 @@
 #ifndef FAILSAFENAVIGATOR_H_
 #define FAILSAFENAVIGATOR_H_
 
+#include <controllib/blocks.hpp>
+#include <controllib/block/BlockParam.hpp>
+
 #include <uORB/topics/vehicle_status.h>
 
-class FailsafeNavigator {
+class FailsafeNavigator : public control::SuperBlock
+{
 public:
 	FailsafeNavigator();
 	virtual ~FailsafeNavigator();
 
-	int navigate_failsafe(const failsafe_state_t failsafe_state);
+	int navigate_failsafe_commloss();
+
+protected:
+private:
+	control::BlockParamFloat data_loss_wp_lat;
+	control::BlockParamFloat data_loss_wp_lon;
 };
 
 #endif /* FAILSAFENAVIGATOR_H_ */

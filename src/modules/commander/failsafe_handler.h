@@ -45,13 +45,15 @@
 #include <uORB/topics/vehicle_status.h>
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/telemetry_status.h>
+#include <controllib/blocks.hpp>
 #include <controllib/uorb/UOrbSubscription.hpp>
 #include <controllib/block/BlockParam.hpp>
 #include <drivers/drv_hrt.h>
 
 #include "state_machine_helper.h"
 
-class FailsafeHandler {
+class FailsafeHandler : public control::SuperBlock
+{
 public:
 	FailsafeHandler();
 	virtual ~FailsafeHandler();
@@ -60,17 +62,17 @@ public:
 protected:
 private:
 	/* Subscriptions */
-	void updateSubscriptions();
 	control::UOrbSubscription<position_setpoint_triplet_s> _position_setpoint_triplet;      /**< position_setpoint_triplet_s sub from navigator */
 	control::UOrbSubscription<telemetry_status_s> _telemetry_status;          		/**< telemetry_status_s sub from mavlink */
 
 	/* Params */
-	void updateParams();
 	control::BlockParamFloat rc_loss_threshold_seconds;
 	control::BlockParamInt failsafe_rc_auto_enabled;
 
 	control::BlockParamFloat data_loss_threshold_seconds;
 	control::BlockParamInt data_loss_threshold_counter;
+	control::BlockParamFloat data_loss_wp_lat;
+	control::BlockParamFloat data_loss_wp_lon;
 
 	control::BlockParamFloat gps_loss_loiter_time;
 	control::BlockParamInt gps_loss_action;

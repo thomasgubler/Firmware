@@ -42,7 +42,10 @@
 
 #include <sys/types.h>
 
-FailsafeNavigator::FailsafeNavigator()
+FailsafeNavigator::FailsafeNavigator() :
+SuperBlock(NULL, "NAV"),
+data_loss_wp_lat(this, "FAIL_DL_LAT", false),
+data_loss_wp_lon(this, "FAIL_DL_LON", false)
 {
 
 }
@@ -52,9 +55,11 @@ FailsafeNavigator::~FailsafeNavigator()
 
 }
 
-int FailsafeNavigator::navigate_failsafe(const failsafe_state_t failsafe_state)
+int FailsafeNavigator::navigate_failsafe_commloss()
 {
+	updateParams();
 
+	//XXX
 
 	return OK;
 }

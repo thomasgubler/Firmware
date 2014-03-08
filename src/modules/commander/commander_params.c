@@ -85,6 +85,8 @@ PARAM_DEFINE_INT32(BAT_N_CELLS, 3);
  */
 PARAM_DEFINE_FLOAT(BAT_CAPACITY, -1.0f);
 
+
+/* Failsafe Handler params */
 /**
  * RC loss threshold time
  *
@@ -92,7 +94,7 @@ PARAM_DEFINE_FLOAT(BAT_CAPACITY, -1.0f);
  *
  * @group Failsafe
  */
-PARAM_DEFINE_FLOAT(FAIL_RC_TIME, 0.0f);
+PARAM_DEFINE_FLOAT(FAIL_RC_TIME, 1.5f);
 
 /**
  * Data link loss threshold time
@@ -130,3 +132,39 @@ PARAM_DEFINE_FLOAT(FAIL_GPS_WAIT, 0);
  * @group Failsafe
  */
 PARAM_DEFINE_FLOAT(FAIL_GPS_ACT, 1);
+
+/**
+ * Datalink counter threshold
+ *
+ * if FAIL_DL_COUN > 0:
+ * 	system will RTL after FAIL_DL_COUN data link losses
+ * else:
+ * 	system will not RTL based on the number of data link losses
+ *
+ * @group Failsafe
+
+ */
+PARAM_DEFINE_INT32(FAIL_DL_COUN, 2);
+
+/**
+ * Action on gps loss
+ *
+ * Determines which action is performed when gps is lost in auto mode:
+ * default (0): try to land
+ * 1: switch to manual
+ *
+ * @group Failsafe
+
+ */
+
+PARAM_DEFINE_FLOAT(FAIL_DL_LAT, -1.0f);
+
+/**
+ * Comm Loss / Data Link Loss Waypoint Longitude
+ *
+ * In case of a data link loss the airplane will fly to this point in order to re-establish the datalink)
+ *
+ * @group Failsafe
+
+ */
+PARAM_DEFINE_FLOAT(FAIL_DL_LON, -1.0f);
