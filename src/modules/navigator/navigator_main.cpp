@@ -974,7 +974,7 @@ StateTable::Tran const Navigator::myTable[NAV_STATE_MAX][MAX_EVENT] = {
 		/* EVENT_LAND_REQUESTED */		{NO_ACTION, NAV_STATE_READY},
 		/* EVENT_MISSION_CHANGED */		{NO_ACTION, NAV_STATE_READY},
 		/* EVENT_HOME_POSITION_CHANGED */	{NO_ACTION, NAV_STATE_READY},
-		/* EVENT_COMM_LOSS */			{NO_ACTION, NAV_STATE_NONE},
+		/* EVENT_COMM_LOSS */			{NO_ACTION, NAV_STATE_READY},
 	},
 	{
 		/* NAV_STATE_LOITER */
@@ -986,7 +986,7 @@ StateTable::Tran const Navigator::myTable[NAV_STATE_MAX][MAX_EVENT] = {
 		/* EVENT_LAND_REQUESTED */		{ACTION(&Navigator::start_land), NAV_STATE_LAND},
 		/* EVENT_MISSION_CHANGED */		{NO_ACTION, NAV_STATE_LOITER},
 		/* EVENT_HOME_POSITION_CHANGED */	{NO_ACTION, NAV_STATE_LOITER},
-		/* EVENT_COMM_LOSS */			{ACTION(&Navigator::start_commloss), NAV_STATE_NONE},
+		/* EVENT_COMM_LOSS */			{ACTION(&Navigator::start_commloss), NAV_STATE_FAIL_COMM_LOSS},
 	},
 	{
 		/* NAV_STATE_MISSION */
@@ -998,7 +998,7 @@ StateTable::Tran const Navigator::myTable[NAV_STATE_MAX][MAX_EVENT] = {
 		/* EVENT_LAND_REQUESTED */		{ACTION(&Navigator::start_land), NAV_STATE_LAND},
 		/* EVENT_MISSION_CHANGED */		{ACTION(&Navigator::start_mission), NAV_STATE_MISSION},
 		/* EVENT_HOME_POSITION_CHANGED */	{NO_ACTION, NAV_STATE_MISSION},
-		/* EVENT_COMM_LOSS */			{ACTION(&Navigator::start_commloss), NAV_STATE_NONE},
+		/* EVENT_COMM_LOSS */			{ACTION(&Navigator::start_commloss), NAV_STATE_FAIL_COMM_LOSS},
 	},
 	{
 		/* NAV_STATE_RTL */
@@ -1010,7 +1010,7 @@ StateTable::Tran const Navigator::myTable[NAV_STATE_MAX][MAX_EVENT] = {
 		/* EVENT_LAND_REQUESTED */		{ACTION(&Navigator::start_land_home), NAV_STATE_LAND},
 		/* EVENT_MISSION_CHANGED */		{NO_ACTION, NAV_STATE_RTL},
 		/* EVENT_HOME_POSITION_CHANGED */	{ACTION(&Navigator::start_rtl), NAV_STATE_RTL},	// TODO need to reset rtl_state
-		/* EVENT_COMM_LOSS */			{ACTION(&Navigator::start_commloss), NAV_STATE_NONE},
+		/* EVENT_COMM_LOSS */			{ACTION(&Navigator::start_commloss), NAV_STATE_FAIL_COMM_LOSS},
 	},
 	{
 		/* NAV_STATE_LAND */
@@ -1022,7 +1022,19 @@ StateTable::Tran const Navigator::myTable[NAV_STATE_MAX][MAX_EVENT] = {
 		/* EVENT_LAND_REQUESTED */		{NO_ACTION, NAV_STATE_LAND},
 		/* EVENT_MISSION_CHANGED */		{NO_ACTION, NAV_STATE_LAND},
 		/* EVENT_HOME_POSITION_CHANGED */	{NO_ACTION, NAV_STATE_LAND},
-		/* EVENT_COMM_LOSS */			{ACTION(&Navigator::start_commloss), NAV_STATE_NONE},
+		/* EVENT_COMM_LOSS */			{ACTION(&Navigator::start_commloss), NAV_STATE_FAIL_COMM_LOSS},
+	},
+	{
+		/* NAV_STATE_FAIL_COMM_LOSS */
+		/* EVENT_NONE_REQUESTED */		{ACTION(&Navigator::start_none), NAV_STATE_NONE},
+		/* EVENT_READY_REQUESTED */		{ACTION(&Navigator::start_ready), NAV_STATE_READY},
+		/* EVENT_LOITER_REQUESTED */		{ACTION(&Navigator::start_loiter), NAV_STATE_LOITER},
+		/* EVENT_MISSION_REQUESTED */		{ACTION(&Navigator::start_mission), NAV_STATE_MISSION},
+		/* EVENT_RTL_REQUESTED */		{ACTION(&Navigator::start_rtl), NAV_STATE_RTL},
+		/* EVENT_LAND_REQUESTED */		{NO_ACTION, NAV_STATE_FAIL_COMM_LOSS},
+		/* EVENT_MISSION_CHANGED */		{NO_ACTION, NAV_STATE_FAIL_COMM_LOSS},
+		/* EVENT_HOME_POSITION_CHANGED */	{NO_ACTION, NAV_STATE_FAIL_COMM_LOSS},
+		/* EVENT_COMM_LOSS */			{NO_ACTION, NAV_STATE_FAIL_COMM_LOSS},
 	},
 };
 
