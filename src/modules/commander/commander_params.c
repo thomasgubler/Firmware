@@ -168,3 +168,13 @@ PARAM_DEFINE_FLOAT(FAIL_DL_LAT, 0.0f);
 
  */
 PARAM_DEFINE_FLOAT(FAIL_DL_LON, 0.0f);
+
+/**
+ * Comm Loss / Data Link Loss Waypoint Altitude
+ *
+ * In case of a data link loss the airplane will fly to this point in order to re-establish the datalink)
+ *
+ * @group Failsafe
+
+ */
+PARAM_DEFINE_FLOAT(FAIL_DL_ALT, 0.0f);

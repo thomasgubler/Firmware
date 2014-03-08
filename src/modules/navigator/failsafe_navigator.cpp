@@ -41,11 +41,13 @@
 #include "failsafe_navigator.h"
 
 #include <sys/types.h>
+#include <string.h>
 
 FailsafeNavigator::FailsafeNavigator() :
 SuperBlock(NULL, "NAV"),
-data_loss_wp_lat(this, "FAIL_DL_LAT", false),
-data_loss_wp_lon(this, "FAIL_DL_LON", false)
+_data_loss_wp_lat(this, "FAIL_DL_LAT", false),
+_data_loss_wp_lon(this, "FAIL_DL_LON", false),
+_data_loss_wp_alt(this, "FAIL_DL_ALT", false)
 {
 
 }
@@ -55,11 +57,22 @@ FailsafeNavigator::~FailsafeNavigator()
 
 }
 
-int FailsafeNavigator::navigate_failsafe_commloss()
+int FailsafeNavigator::navigate_failsafe_commloss(mission_item_s * mission_item, float loiter_radius, float acceptance_radius)
 {
 	updateParams();
 
-	//XXX
+	mission_item->lat = _data_loss_wp_lat.get();
+	mission_item->lon = _data_loss_wp_lon.get();
+	mission_item->altitude_is_relative = false;
+	mission_item->altitude = _data_loss_wp_alt.get();
+	mission_item->yaw = NAN;
+	mission_item->loiter_radius = loiter_radius;
+	mission_item->nav_cmd = NAV_CMD_LOITER_UNLIMITED;
+	mission_item->acceptance_radius = acceptance_radius;
+	mission_item->time_inside = 0.0f;
+	mission_item->pitch_min = 0.0f;
+	mission_item->autocontinue = false;
+	mission_item->origin = ORIGIN_ONBOARD;
 
 	return OK;
 }

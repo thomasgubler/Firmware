@@ -73,6 +73,7 @@ private:
 	control::BlockParamInt data_loss_threshold_counter;
 	control::BlockParamFloat data_loss_wp_lat;
 	control::BlockParamFloat data_loss_wp_lon;
+	control::BlockParamFloat data_loss_wp_alt;
 
 	control::BlockParamFloat gps_loss_loiter_time;
 	control::BlockParamInt gps_loss_action;

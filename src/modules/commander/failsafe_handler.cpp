@@ -55,6 +55,7 @@ data_loss_threshold_seconds(this, "DL_TIME"),
 data_loss_threshold_counter(this, "DL_COUN"),
 data_loss_wp_lat(this, "DL_LAT"),
 data_loss_wp_lon(this, "DL_LON"),
+data_loss_wp_alt(this, "DL_ALT"),
 gps_loss_loiter_time(this, "GPS_WAIT"),
 gps_loss_action(this, "GPS_ACT"),
 last_timestamp(hrt_absolute_time()),
@@ -152,7 +153,7 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 			/* Fly to comms loss wp if it is available and if we are below the comms loss counter threshold */
 
 			if ( ( data_loss_threshold_counter.get() > 0 && counter_comm_losses > data_loss_threshold_counter.get() ) ||
-					data_loss_wp_lat.get() < FLT_EPSILON || data_loss_wp_on.get() <= FLT_EPSILON ) {
+					data_loss_wp_lat.get() < FLT_EPSILON || data_loss_wp_lon.get() <= FLT_EPSILON || data_loss_wp_alt.get() <= FLT_EPSILON) {
 				failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS_RTL);
 			} else {
 				failsafe_res = failsafe_state_transition(status, FAILSAFE_STATE_COMM_LOSS);

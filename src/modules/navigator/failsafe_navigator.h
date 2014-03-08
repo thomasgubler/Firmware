@@ -45,6 +45,8 @@
 #include <controllib/block/BlockParam.hpp>
 
 #include <uORB/topics/vehicle_status.h>
+#include <uORB/topics/position_setpoint_triplet.h>
+#include <uORB/topics/mission.h>
 
 class FailsafeNavigator : public control::SuperBlock
 {
@@ -52,12 +54,14 @@ public:
 	FailsafeNavigator();
 	virtual ~FailsafeNavigator();
 
-	int navigate_failsafe_commloss();
+	int navigate_failsafe_commloss(mission_item_s * mission_item, float loiter_radius, float acceptance_radius);
 
 protected:
 private:
-	control::BlockParamFloat data_loss_wp_lat;
-	control::BlockParamFloat data_loss_wp_lon;
+	/* Params */
+	control::BlockParamFloat _data_loss_wp_lat;
+	control::BlockParamFloat _data_loss_wp_lon;
+	control::BlockParamFloat _data_loss_wp_alt;
 };
 
 #endif /* FAILSAFENAVIGATOR_H_ */

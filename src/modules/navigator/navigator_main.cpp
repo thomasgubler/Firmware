@@ -1314,7 +1314,15 @@ Navigator::start_land_home()
 void
 Navigator::start_commloss()
 {
+	reset_reached();
 
+	_failsafeNavigator.navigate_failsafe_commloss(&_mission_item, _parameters.loiter_radius, _parameters.acceptance_radius);
+
+	position_setpoint_from_mission_item(&_pos_sp_triplet.current, &_mission_item);
+	_pos_sp_triplet.next.valid = false;
+
+	_mission_item_valid = true;
+	_pos_sp_triplet_updated = true;
 }
 
 void
