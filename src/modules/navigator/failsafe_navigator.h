@@ -1,8 +1,7 @@
 /****************************************************************************
  *
  *   Copyright (c) 2013 PX4 Development Team. All rights reserved.
- *   Author: @author Thomas Gubler <thomasgubler@student.ethz.ch>
- *   	     @author Anton Babushkin <anton.babushkin@me.com>
+ *   Author: @author Thomas Gubler <thomasgubler@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,58 +32,23 @@
  *
  ****************************************************************************/
 /**
- * @file failsafe_handler.h
- * Provides an update function and calls to failsafe state machine given the current state of the system
+ * @file failsafe_navigator.h
+ * Navigator functions for operation in failsafe mode
  *
  * @author Thomas Gubler <thomasgubler@gmail.com>
  */
 
-#ifndef FAILSAFEHANDLER_H_
-#define FAILSAFEHANDLER_H_
+#ifndef FAILSAFENAVIGATOR_H_
+#define FAILSAFENAVIGATOR_H_
 
 #include <uORB/topics/vehicle_status.h>
-#include <uORB/topics/position_setpoint_triplet.h>
-#include <uORB/topics/telemetry_status.h>
-#include <controllib/uorb/UOrbSubscription.hpp>
-#include <controllib/block/BlockParam.hpp>
-#include <drivers/drv_hrt.h>
 
-#include "state_machine_helper.h"
-
-class FailsafeHandler {
+class FailsafeNavigator {
 public:
-	FailsafeHandler();
-	virtual ~FailsafeHandler();
+	FailsafeNavigator();
+	virtual ~FailsafeNavigator();
 
-	transition_result_t update(vehicle_status_s* status, const actuator_armed_s& armed);
-protected:
-private:
-	/* Subscriptions */
-	void updateSubscriptions();
-	control::UOrbSubscription<position_setpoint_triplet_s> _position_setpoint_triplet;      /**< position_setpoint_triplet_s sub from navigator */
-	control::UOrbSubscription<telemetry_status_s> _telemetry_status;          		/**< telemetry_status_s sub from mavlink */
-
-	/* Params */
-	void updateParams();
-	control::BlockParamFloat rc_loss_threshold_seconds;
-	control::BlockParamFloat data_loss_threshold_seconds;
-	control::BlockParamInt failsafe_rc_auto_enabled;
-	control::BlockParamFloat gps_loss_loiter_time;
-	control::BlockParamInt gps_loss_action;
-
-	hrt_abstime last_timestamp;		/**< Timestamp of last update */
-
-	float rc_loss_timer;			/**< Counts the time of RC loss in seconds */
-
-	transition_result_t handle_rc_loss_manual(vehicle_status_s* status);
-	transition_result_t handle_rc_loss_auto(vehicle_status_s* status);
-
-
-	int counter_gps_losses;
-	float gps_loss_wait_timer;
-	transition_result_t update_gps_wait(vehicle_status_s* status, float dt);
-
-	int counter_comm_losses;
+	int navigate_failsafe(const failsafe_state_t failsafe_state);
 };
 
-#endif /* FAILSAFEHANDLER_H_ */
+#endif /* FAILSAFENAVIGATOR_H_ */

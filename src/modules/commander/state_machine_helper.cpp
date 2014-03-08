@@ -436,19 +436,23 @@ transition_result_t failsafe_state_transition(struct vehicle_status_s *status, f
 		case FAILSAFE_STATE_TERMINATION:
 			/* always allowed */
 			ret = TRANSITION_CHANGED;
+			//XXX set more (navigator) flags
 			break;
 		case FAILSAFE_STATE_COMM_LOSS:
 			/* need global position */
 			if (status->condition_global_position_valid) {
-				//XXX set set_nav_state to NAV_STATE_COMMSLOSS which makes the navigator perform the actions for a comm loss
+				status->set_nav_state = NAV_STATE_FAIL_COMM_LOSS;
+				status->set_nav_state_timestamp = hrt_absolute_time();
 				ret = TRANSITION_CHANGED;
 			}
 			break;
 
 		case FAILSAFE_STATE_GPS_LOSS_WAIT:
+			//XXX set more (navigator) flags
 				ret = TRANSITION_CHANGED;
 			break;
 		case FAILSAFE_STATE_GPS_LOSS_LAND:
+			//XXX set more (navigator) flags
 			if (status->failsafe_state == FAILSAFE_STATE_GPS_LOSS_WAIT) {
 				ret = TRANSITION_CHANGED;
 			}

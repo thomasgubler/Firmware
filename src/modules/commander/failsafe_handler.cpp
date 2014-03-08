@@ -35,6 +35,8 @@
 /**
  * @file failsafe_handler.cpp
  * Provides an update function and calls to failsafe state machine given the current state of the system
+ *
+ * @author Thomas Gubler <thomasgubler@gmail.com>
  */
 
 #include "failsafe_handler.h"
@@ -53,7 +55,8 @@ gps_loss_action(NULL, "FAIL_GPS_ACT", false),
 last_timestamp(hrt_absolute_time()),
 rc_loss_timer(0.0f),
 counter_gps_losses(0),
-gps_loss_wait_timer(0.0f)
+gps_loss_wait_timer(0.0f),
+counter_comm_losses(0)
 {
 	updateSubscriptions();
 	updateParams();
@@ -122,6 +125,10 @@ transition_result_t FailsafeHandler::update(vehicle_status_s* status, const actu
 		/* Increase gps loss counter if this is new occurrence */
 		if(!status->condition_global_position_valid && status->failsafe_state != FAILSAFE_STATE_GPS_LOSS_WAIT)
 			counter_gps_losses++;
+
+		/* Increase comm loss counter if this is new occurrence */
+		if(!status->condition_global_position_valid && status->failsafe_state != FAILSAFE_STATE_COMM_LOSS)
+			counter_comm_losses++;
 
 		/* Change states */
 		if (!status->condition_global_position_valid && data_link_loss_threshold_reached) {
