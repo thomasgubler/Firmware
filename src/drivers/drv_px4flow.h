@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2013 Estimation and Control Library (ECL). All rights reserved.
+ *   Copyright (C) 2013 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -10,9 +10,9 @@
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in
- *    the documentation4 and/or other materials provided with the
+ *    the documentation and/or other materials provided with the
  *    distribution.
- * 3. Neither the name ECL nor the names of its contributors may be
+ * 3. Neither the name PX4 nor the names of its contributors may be
  *    used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -32,29 +32,53 @@
  ****************************************************************************/
 
 /**
- * @file LaunchMethod.h
- * Base class for different launch methods
- *
- * @author Thomas Gubler <thomasgubler@gmail.com>
+ * @file Rangefinder driver interface.
  */
 
-#ifndef LAUNCHMETHOD_H_
-#define LAUNCHMETHOD_H_
+#ifndef _DRV_PX4FLOW_H
+#define _DRV_PX4FLOW_H
 
-namespace launchdetection
-{
+#include <stdint.h>
+#include <sys/ioctl.h>
 
-class LaunchMethod
-{
-public:
-	virtual void update(float accel_x) = 0;
-	virtual bool getLaunchDetected() = 0;
-	virtual void reset() = 0;
+#include "drv_sensor.h"
+#include "drv_orb_dev.h"
 
-protected:
-private:
+#define PX4FLOW_DEVICE_PATH	"/dev/px4flow"
+
+/**
+ * Optical flow in NED body frame in SI units.
+ *
+ * @see http://en.wikipedia.org/wiki/International_System_of_Units
+ */
+struct px4flow_report {
+
+	uint64_t timestamp;		/**< in microseconds since system start          */
+
+	int16_t flow_raw_x;		/**< flow in pixels in X direction, not rotation-compensated */
+	int16_t flow_raw_y;		/**< flow in pixels in Y direction, not rotation-compensated */
+	float flow_comp_x_m;		/**< speed over ground in meters, rotation-compensated */
+	float flow_comp_y_m;		/**< speed over ground in meters, rotation-compensated */
+	float ground_distance_m;	/**< Altitude / distance to ground in meters */
+	uint8_t	quality;		/**< Quality of the measurement, 0: bad quality, 255: maximum quality */
+	uint8_t sensor_id;		/**< id of the sensor emitting the flow value */
+
 };
 
-}
+/*
+ * ObjDev tag for px4flow data.
+ */
+ORB_DECLARE(optical_flow);
 
-#endif /* LAUNCHMETHOD_H_ */
+/*
+ * ioctl() definitions
+ *
+ * px4flow drivers also implement the generic sensor driver
+ * interfaces from drv_sensor.h
+ */
+
+#define _PX4FLOWIOCBASE			(0x7700)
+#define __PX4FLOWIOC(_n)		(_IOC(_PX4FLOWIOCBASE, _n))
+
+
+#endif /* _DRV_PX4FLOW_H */
