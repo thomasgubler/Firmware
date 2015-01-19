@@ -157,6 +157,9 @@ MultirotorMixer::from_text(Mixer::ControlCallback control_cb, uintptr_t cb_handl
 	} else if (!strcmp(geomname, "4dc")) {
 		geometry = MultirotorGeometry::QUAD_DEADCAT;
 
+	} else if (!strcmp(geomname, "4i")) {
+		geometry = MultirotorGeometry::QUAD_IRIS;
+
 	} else if (!strcmp(geomname, "6+")) {
 		geometry = MultirotorGeometry::HEX_PLUS;
 
@@ -171,7 +174,7 @@ MultirotorMixer::from_text(Mixer::ControlCallback control_cb, uintptr_t cb_handl
 
 	} else if (!strcmp(geomname, "8x")) {
 		geometry = MultirotorGeometry::OCTA_X;
-		
+
 	} else if (!strcmp(geomname, "8c")) {
 		geometry = MultirotorGeometry::OCTA_COX;
 
